@@ -1,0 +1,3 @@
+{"id":"smoke-uno-plus4","mode":"referee","category":"faq","active_game_id":"uno","query":"+4 可以随便出吗？","expected":{"must_game_ids":["uno"],"keyword_groups":[["+4","Wild Draw Four"],["质疑","同色牌"]],"min_recall_at_k":1.0}}
+{"id":"smoke-catan-robber","mode":"referee","category":"faq","active_game_id":"catan","query":"强盗封锁后还能产资源吗？","expected":{"must_game_ids":["catan"],"keyword_groups":[["强盗","封锁"],["不能","产资源"]],"min_recall_at_k":1.0}}
+{"id":"smoke-pandemic-outbreak","mode":"referee","category":"special_rule","active_game_id":"pandemic","query":"第4个病毒块会怎么样？","expected":{"must_game_ids":["pandemic"],"keyword_groups":[["爆发","连锁"],["周围城市","各+1毒"]],"min_recall_at_k":1.0}}

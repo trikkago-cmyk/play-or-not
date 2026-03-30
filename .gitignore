@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+
+# Node / frontend build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local deploy / runtime state
+.vercel/
+rag/.chroma/
+rag/.cache/
+tts_service/evals/
+rag_evals/reports/
+
+# Local agent state
+.agent/
+.agents/
+.learnings/
+
+# Logs / temp
+*.log
+tmp/
+temp/

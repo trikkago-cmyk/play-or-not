@@ -1,0 +1,25 @@
+{
+  "adapter": "function",
+  "function": {
+    "module": "rag_evals.adapters",
+    "function": "query_python_rag",
+    "kwargs_template": {
+      "where": {
+        "$and": [
+          {
+            "mode": "$mode"
+          },
+          {
+            "game_id": "$active_game_id"
+          }
+        ]
+      }
+    },
+    "field_mapping": {
+      "query": "query",
+      "top_k": "top_k",
+      "mode": "mode",
+      "active_game_id": "active_game_id"
+    }
+  }
+}

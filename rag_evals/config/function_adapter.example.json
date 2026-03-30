@@ -1,0 +1,14 @@
+{
+  "adapter": "function",
+  "function": {
+    "module": "my_project.retriever",
+    "function": "retrieve",
+    "kwargs_template": {},
+    "field_mapping": {
+      "query": "query",
+      "top_k": "top_k",
+      "mode": "mode",
+      "active_game_id": "active_game_id"
+    }
+  }
+}

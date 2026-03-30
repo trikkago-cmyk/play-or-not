@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /developers/
+Disallow: /llms.txt
+Disallow: /openapi.json
+Disallow: /capabilities.json
+
+Sitemap: https://play-or-not-dm.vercel.app/sitemap.xml

@@ -1,0 +1,29 @@
+{
+  "adapter": "http",
+  "http": {
+    "endpoint": "http://127.0.0.1:8001/query",
+    "method": "POST",
+    "timeout_sec": 20,
+    "headers": {},
+    "payload_template": {
+      "query": "$query",
+      "top_k": "$top_k",
+      "where": {
+        "$and": [
+          {
+            "mode": "$mode"
+          },
+          {
+            "game_id": "$active_game_id"
+          }
+        ]
+      }
+    },
+    "field_mapping": {
+      "query": "query",
+      "top_k": "top_k",
+      "mode": "mode",
+      "active_game_id": "active_game_id"
+    }
+  }
+}

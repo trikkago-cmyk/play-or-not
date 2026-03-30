@@ -1,0 +1,74 @@
+{
+  "adapter_config": "python_rag_function.example.json",
+  "report_dir": "../reports/suite",
+  "suites": [
+    {
+      "name": "seed_recommendation",
+      "groups": ["seed", "recommendation"],
+      "dataset": "../data/seed_recommendation_eval_cases.jsonl",
+      "top_k": 5,
+      "default_threshold": 0.67,
+      "min_metrics": {
+        "pass_rate": 1.0,
+        "strict_hit_at_k": 1.0,
+        "distinct_game_ids_at_k_mean": 4.5
+      }
+    },
+    {
+      "name": "seed_referee",
+      "groups": ["seed", "referee"],
+      "dataset": "../data/seed_referee_eval_cases.jsonl",
+      "top_k": 5,
+      "default_threshold": 0.8,
+      "min_metrics": {
+        "pass_rate": 1.0,
+        "strict_hit_at_k": 1.0
+      }
+    },
+    {
+      "name": "expanded_recommendation",
+      "groups": ["expanded", "recommendation"],
+      "dataset": "../data/expanded_recommendation_eval_cases.jsonl",
+      "top_k": 5,
+      "default_threshold": 0.67,
+      "min_metrics": {
+        "pass_rate": 1.0,
+        "strict_hit_at_k": 1.0,
+        "distinct_game_ids_at_k_mean": 4.5
+      }
+    },
+    {
+      "name": "expanded_referee",
+      "groups": ["expanded", "referee"],
+      "dataset": "../data/expanded_referee_eval_cases.jsonl",
+      "top_k": 5,
+      "default_threshold": 0.8,
+      "min_metrics": {
+        "pass_rate": 1.0,
+        "strict_hit_at_k": 1.0
+      }
+    },
+    {
+      "name": "hard_recommendation",
+      "groups": ["hard", "recommendation"],
+      "dataset": "../data/hard_recommendation_eval_cases.jsonl",
+      "top_k": 5,
+      "default_threshold": 0.67,
+      "min_metrics": {
+        "pass_rate": 1.0,
+        "distinct_game_ids_at_k_mean": 4.5
+      }
+    },
+    {
+      "name": "hard_referee",
+      "groups": ["hard", "referee"],
+      "dataset": "../data/hard_referee_eval_cases.jsonl",
+      "top_k": 5,
+      "default_threshold": 0.8,
+      "min_metrics": {
+        "pass_rate": 1.0,
+        "top_1_section_pass_rate": 1.0
+      }
+    }
+  ]
+}

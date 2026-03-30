@@ -1,0 +1,55 @@
+# 玩吗 - 桌游DM
+
+桌游推荐与规则问答 Web 应用，面向聚会玩家、新手玩家和需要即时裁判说明的使用场景。
+
+## 产品能做什么
+
+- 根据人数、时长、氛围和场景推荐桌游
+- 解释规则、胜利条件、平局和常见追问
+- 在推荐模式和裁判模式之间切换
+- 支持语音输入转文字后继续聊天
+
+## 当前对 Agent 最友好的入口
+
+- GET /developers/ : 人类和 Agent 都可读的能力说明页
+- GET /capabilities.json : 机器可读的能力清单与任务路由映射
+- GET /openapi.json : 结构化接口 schema
+- GET /api/chat : 机器可读的聊天接口说明
+- POST /api/chat : 聊天调用主入口
+- GET /api/rag?describe=1 : RAG 代理接口说明
+- GET /api/rag : RAG 服务健康检查
+- POST /api/rag : RAG 查询代理
+- GET /api/stt : 语音转写接口说明
+- POST /api/stt : 上传音频并转写
+- POST /api/auth/email/send : 发送人类登录邮箱验证码
+- POST /api/auth/email/verify : 验证邮箱验证码并建立浏览器 session
+- GET /api/auth/session : 读取当前浏览器登录状态
+
+## 当前能力边界
+
+- 当前没有公开的 API key 管理页
+- 当前没有公开的 OAuth / service account
+- 当前没有公开的用户偏好写入 API
+- 当前聊天接口更适合问答和推荐，不保证长期会话持久化
+- 人类登录当前使用邮箱验证码
+
+## 首选调用示例
+
+POST /api/chat
+Content-Type: application/json
+
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "推荐一个适合 4 人破冰、30 分钟内能讲完规则的桌游"
+    }
+  ],
+  "temperature": 0.7
+}
+
+## 相关文档
+
+- https://play-or-not-dm.vercel.app/developers/
+- https://play-or-not-dm.vercel.app/capabilities.json
+- https://play-or-not-dm.vercel.app/openapi.json

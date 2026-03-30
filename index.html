@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>玩吗 - 桌游推荐</title>
+  <meta name="description" content="桌游推荐、规则讲解与即时问答助手。适合聚会选桌游、开局后追问规则、胜利条件和平局处理。" />
+  <meta name="theme-color" content="#FFF9F0" />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://play-or-not-dm.vercel.app/" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chinese-fonts/zpix/dist/Zpix/result.css" />
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "玩吗 - 桌游DM",
+      "applicationCategory": "GameApplication",
+      "operatingSystem": "Web",
+      "description": "帮助用户推荐桌游、解释规则、回答胜利条件和常见问题的网页应用。",
+      "url": "https://play-or-not-dm.vercel.app/",
+      "featureList": [
+        "桌游推荐",
+        "规则讲解",
+        "裁判追问",
+        "语音转文字"
+      ]
+    }
+  </script>
+</head>
+
+<body>
+  <div id="root">
+    <main style="max-width: 760px; margin: 0 auto; padding: 32px 20px; font-family: 'PingFang SC', 'Helvetica Neue', sans-serif; line-height: 1.6;">
+      <h1>玩吗 - 桌游推荐与规则助手</h1>
+      <p>
+        这是一个帮助玩家快速挑选桌游、并在开局后即时解释规则与胜利条件的 Web 应用。
+        适合聚会破冰、情侣双人、朋友局以及新手上桌场景。
+      </p>
+      <ul>
+        <li>能做：桌游推荐、规则解释、裁判追问、语音输入转写。</li>
+        <li>当前不提供：公开 OAuth / service account、用户偏好写入 API、长期会话状态写入。</li>
+      </ul>
+      <p>Agent 与开发者入口：</p>
+      <ul>
+        <li><a href="/developers/">/developers/</a></li>
+        <li><a href="/capabilities.json">/capabilities.json</a></li>
+        <li><a href="/llms.txt">/llms.txt</a></li>
+        <li><a href="/openapi.json">/openapi.json</a></li>
+        <li><a href="/api/chat">/api/chat</a></li>
+      </ul>
+    </main>
+  </div>
+  <noscript>
+    该应用需要 JavaScript 才能进入完整交互模式。若你是开发者或 Agent，可先访问
+    <a href="/developers/">/developers/</a>、<a href="/llms.txt">/llms.txt</a> 与
+    <a href="/openapi.json">/openapi.json</a>。
+  </noscript>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

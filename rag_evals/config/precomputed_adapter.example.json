@@ -1,0 +1,8 @@
+{
+  "adapter": "precomputed",
+  "precomputed": {
+    "results_path": "rag_evals/data/smoke_precomputed_results.jsonl",
+    "id_field": "id",
+    "chunks_field": "chunks"
+  }
+}

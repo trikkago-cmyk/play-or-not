@@ -1,0 +1,3 @@
+{"id":"smoke-uno-plus4","chunks":[{"id":"uno-kb-2","text":"+4牌 (Wild Draw Four) 只有当手中没有与底牌颜色相同的牌时才能打出。下家可以质疑你是否有同色牌。","metadata":{"game_id":"uno","section":"knowledgeBase"}}]}
+{"id":"smoke-catan-robber","chunks":[{"id":"catan-kb-2","text":"7点触发强盗，移动后会封锁地块。被强盗压住的地块即使数字被掷出也不能产资源。","metadata":{"game_id":"catan","section":"knowledgeBase"}}]}
+{"id":"smoke-pandemic-outbreak","chunks":[{"id":"pandemic-kb-1","text":"城市有3个毒时再加第4个会爆发，周围连接城市各+1毒，并可能触发连锁爆发。","metadata":{"game_id":"pandemic","section":"knowledgeBase"}}]}

@@ -1,0 +1,21 @@
+{
+  "name": "玩吗 - 桌游DM",
+  "short_name": "玩吗",
+  "description": "桌游推荐、规则讲解与即时问答助手，适合聚会选桌游和开局后规则追问。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF9F0",
+  "theme_color": "#FFF9F0",
+  "icons": [
+    {
+      "src": "/avatars/dm_luosi.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/avatars/dm_luosi.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

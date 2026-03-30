@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>玩吗 - Internal Integration Notes</title>
+  <meta name="description" content="玩吗桌游DM 的产品能力、Agent 入口、接口说明与当前能力边界。" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <style>
+    :root {
+      --bg: #fff8ee;
+      --card: #ffffff;
+      --text: #1f1f1f;
+      --muted: #5f6368;
+      --line: #d7d0c5;
+      --accent: #111111;
+      --link: #2952cc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+      background: linear-gradient(180deg, #fff8ee 0%, #fff3df 100%);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 48px 20px 72px;
+    }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { font-size: 40px; margin-bottom: 12px; }
+    h2 { margin-top: 36px; font-size: 24px; }
+    .lead { font-size: 18px; color: var(--muted); max-width: 760px; }
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      margin-top: 24px;
+    }
+    .card {
+      background: var(--card);
+      border: 2px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+    }
+    .link-list, ul { padding-left: 20px; }
+    code, pre {
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+    }
+    pre {
+      background: #151515;
+      color: #f5f5f5;
+      padding: 16px;
+      border-radius: 14px;
+      overflow-x: auto;
+    }
+    a { color: var(--link); }
+    .pill {
+      display: inline-block;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      margin: 4px 8px 0 0;
+      font-size: 14px;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="/">返回产品首页</a></p>
+    <h1>玩吗 - Internal Integration Notes</h1>
+    <p class="lead">
+      「玩吗」是一个桌游推荐与规则问答应用。它主要帮助用户在聚会前快速选桌游，并在开局后即时解释规则、胜利条件和常见追问。
+      这个页面主要作为内部集成说明使用，不属于面向普通玩家的产品入口。
+    </p>
+
+    <div>
+      <span class="pill">桌游推荐</span>
+      <span class="pill">规则讲解</span>
+      <span class="pill">裁判追问</span>
+      <span class="pill">语音转写</span>
+      <span class="pill">RAG 代理</span>
+    </div>
+
+    <h2>产品能做什么</h2>
+    <div class="grid">
+      <section class="card">
+        <h3>推荐模式</h3>
+        <p>根据人数、时长、复杂度、场景和氛围推荐合适的桌游。</p>
+      </section>
+      <section class="card">
+        <h3>裁判模式</h3>
+        <p>围绕某个具体游戏回答流程、胜利条件、平局、特殊效果等问题。</p>
+      </section>
+      <section class="card">
+        <h3>语音输入</h3>
+        <p>前端支持录音，后端通过 <code>/api/stt</code> 把音频转成文字后继续聊天。</p>
+      </section>
+    </div>
+
+    <h2>当前公开边界</h2>
+    <ul>
+      <li>当前公开接口主要适合问答、推荐和语音转写，不适合复杂写操作。</li>
+      <li>当前没有公开的 API key 发放页、OAuth 文档或 service account。</li>
+      <li>当前没有公开的用户偏好写入 API，也不保证长期会话持久化。</li>
+      <li>人类登录当前使用邮箱验证码 + 浏览器 session cookie，Agent 更适合走公开接口层。</li>
+    </ul>
+
+    <h2>发现入口</h2>
+    <ul class="link-list">
+      <li><a href="/llms.txt">/llms.txt</a>：给 LLM / Agent 的简明说明</li>
+      <li><a href="/capabilities.json">/capabilities.json</a>：机器可读的任务与能力清单</li>
+      <li><a href="/openapi.json">/openapi.json</a>：结构化 API schema</li>
+      <li><a href="/api/chat">/api/chat</a>：聊天接口自描述 JSON</li>
+      <li><a href="/api/rag?describe=1">/api/rag?describe=1</a>：RAG 代理说明</li>
+      <li><a href="/api/stt">/api/stt</a>：语音转写接口说明</li>
+      <li><a href="/api/auth/email/send">/api/auth/email/send</a>：邮箱验证码发送说明</li>
+      <li><a href="/api/auth/email/verify">/api/auth/email/verify</a>：邮箱验证码校验说明</li>
+      <li><a href="/api/auth/session?describe=1">/api/auth/session?describe=1</a>：登录态读取说明</li>
+    </ul>
+
+    <h2>最常用接口</h2>
+    <div class="card">
+      <h3>POST /api/chat</h3>
+      <p>推荐桌游或解释规则的主入口。请求体兼容 OpenAI 风格的 <code>messages</code> 数组。</p>
+<pre>{
+  "messages": [
+    {
+      "role": "user",
+      "content": "推荐一个适合 4 人破冰、30 分钟内能讲完规则的桌游"
+    }
+  ],
+  "temperature": 0.7,
+  "max_tokens": 800
+}</pre>
+    </div>
+
+    <div class="card">
+      <h3>POST /api/stt</h3>
+      <p>使用 <code>multipart/form-data</code> 上传音频文件，字段名为 <code>file</code>。</p>
+    </div>
+
+    <div class="card">
+      <h3>GET /api/rag 与 POST /api/rag</h3>
+      <p><code>GET</code> 默认返回健康检查；<code>POST</code> 将 JSON 查询代理到 Python RAG 服务。</p>
+    </div>
+
+    <div class="card">
+      <h3>邮箱验证码登录接口</h3>
+      <p>
+        人类登录通过 <code>POST /api/auth/email/send</code> 发送验证码，
+        再通过 <code>POST /api/auth/email/verify</code> 建立浏览器 session，
+        最后可通过 <code>GET /api/auth/session</code> 读取当前登录状态。
+      </p>
+    </div>
+
+    <h2>任务与路由映射</h2>
+    <div class="card">
+      <ul>
+        <li><strong>recommend_game</strong>：优先走 <code>POST /api/chat</code>，可选传 <code>"task":"recommend_game"</code></li>
+        <li><strong>explain_rules</strong>：优先走 <code>POST /api/chat</code>，适合规则、胜利条件、平局问答</li>
+        <li><strong>referee_followup</strong>：优先走 <code>POST /api/chat</code>，建议把近期对话历史一起带上</li>
+        <li><strong>transcribe_audio</strong>：走 <code>POST /api/stt</code>，用 <code>multipart/form-data</code> 上传 <code>file</code></li>
+        <li><strong>query_rag</strong>：仅在需要下层知识库代理时再走 <code>POST /api/rag</code></li>
+      </ul>
+      <p>如果你想直接获取这份映射的 JSON 版本，读取 <a href="/capabilities.json">/capabilities.json</a> 即可。</p>
+    </div>
+
+    <h2>推荐的 Agent 调用顺序</h2>
+    <ol>
+      <li>先读取 <a href="/llms.txt">/llms.txt</a> 或 <a href="/developers/">/developers/</a> 建立整体认知。</li>
+      <li>再读取 <a href="/openapi.json">/openapi.json</a> 或接口自描述 JSON。</li>
+      <li>优先从 <code>POST /api/chat</code> 完成推荐与规则问答主任务。</li>
+      <li>如果需要语音转写，使用 <code>POST /api/stt</code>。</li>
+      <li>如果需要走底层知识库或健康检查，再访问 <code>/api/rag</code>。</li>
+    </ol>
+  </main>
+</body>
+</html>

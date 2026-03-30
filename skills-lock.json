@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "openclaw-parakeet-stt": {
+      "source": "smithery/ai",
+      "sourceType": "well-known",
+      "computedHash": "9708e57091cb3a407d9cec5cb929708ee71bbf201c237145abffdc5189aaf329"
+    },
+    "skill-vetter": {
+      "source": "useai-pro/openclaw-skills-security",
+      "sourceType": "github",
+      "computedHash": "5172ac6d437a5f41b5fa8be0def458a48b0e73c6b901c3f4e5e792434c4dc133"
+    }
+  }
+}

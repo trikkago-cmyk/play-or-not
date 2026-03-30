@@ -1,0 +1,573 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "玩吗 - 桌游DM API",
+    "version": "2026-03-24",
+    "description": "Agent-friendly public surface for board game recommendation, rule explanation, RAG proxying, and speech-to-text."
+  },
+  "externalDocs": {
+    "description": "Capability index and route selection guide",
+    "url": "https://play-or-not-dm.vercel.app/capabilities.json"
+  },
+  "servers": [
+    {
+      "url": "https://play-or-not-dm.vercel.app"
+    }
+  ],
+  "paths": {
+    "/api/chat": {
+      "get": {
+        "summary": "Get chat endpoint documentation",
+        "responses": {
+          "200": {
+            "description": "Machine-readable contract for the chat endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointDescription"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Recommend games or explain rules",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OpenAI-compatible chat completion payload from the upstream model provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rag": {
+      "get": {
+        "summary": "RAG health check or endpoint description",
+        "parameters": [
+          {
+            "name": "describe",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            },
+            "description": "When set to 1, return endpoint documentation instead of health."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "RAG health payload or endpoint description",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Proxy a JSON query to the Python RAG service",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The proxied JSON response from the RAG service",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stt": {
+      "get": {
+        "summary": "Get STT endpoint documentation",
+        "responses": {
+          "200": {
+            "description": "Machine-readable contract for the STT endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointDescription"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Transcribe an uploaded audio file",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/SttRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transcription result from the upstream STT provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/email/send": {
+      "get": {
+        "summary": "Get email verification send endpoint documentation",
+        "responses": {
+          "200": {
+            "description": "Machine-readable contract for the email send endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointDescription"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Send a login verification code to an email address",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailSendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification email accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailSendResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/email/verify": {
+      "get": {
+        "summary": "Get email verification verify endpoint documentation",
+        "responses": {
+          "200": {
+            "description": "Machine-readable contract for the email verify endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointDescription"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Verify a login code and create a browser session",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailVerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated session established",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/session": {
+      "get": {
+        "summary": "Read the current browser auth session",
+        "parameters": [
+          {
+            "name": "describe",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            },
+            "description": "When set to 1, return endpoint documentation instead of session state."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current browser auth session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "get": {
+        "summary": "Get logout endpoint documentation",
+        "responses": {
+          "200": {
+            "description": "Machine-readable contract for the logout endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointDescription"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Clear the current browser auth session",
+        "responses": {
+          "200": {
+            "description": "Logout succeeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/capabilities.json": {
+      "get": {
+        "summary": "Get the machine-readable product capability manifest",
+        "responses": {
+          "200": {
+            "description": "Capability list, route mapping, auth notes, and preferred agent flow",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilitiesManifest"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChatMessage": {
+        "type": "object",
+        "required": ["role", "content"],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["system", "user", "assistant"]
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "ChatRequest": {
+        "type": "object",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            }
+          },
+          "model": {
+            "type": "string"
+          },
+          "max_tokens": {
+            "type": "integer"
+          },
+          "temperature": {
+            "type": "number"
+          },
+          "task": {
+            "type": "string",
+            "enum": ["recommend_game", "explain_rules", "referee_followup"]
+          },
+          "providerBaseUrl": {
+            "type": "string"
+          },
+          "userApiKey": {
+            "type": "string"
+          }
+        }
+      },
+      "SttRequest": {
+        "type": "object",
+        "required": ["file"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary"
+          }
+        }
+      },
+      "EmailSendRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "EmailSendResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "masked_email": {
+            "type": "string"
+          },
+          "delivery_mode": {
+            "type": "string",
+            "enum": ["resend", "dev_echo"]
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["resend", "development"]
+          },
+          "cooldown_seconds": {
+            "type": "integer"
+          },
+          "expires_in_seconds": {
+            "type": "integer"
+          },
+          "dev_code": {
+            "type": "string"
+          }
+        }
+      },
+      "EmailVerifyRequest": {
+        "type": "object",
+        "required": ["email", "code"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          }
+        }
+      },
+      "AuthSession": {
+        "type": "object",
+        "properties": {
+          "authenticated": {
+            "type": "boolean"
+          },
+          "user": {
+            "type": "object",
+            "properties": {
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "masked_email": {
+                "type": "string"
+              }
+            }
+          },
+          "session_expires_in_seconds": {
+            "type": "integer"
+          }
+        }
+      },
+      "EndpointDescription": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "allowed_methods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "docs_url": {
+            "type": "string"
+          },
+          "openapi_url": {
+            "type": "string"
+          },
+          "llms_url": {
+            "type": "string"
+          },
+          "capabilities_url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "CapabilitiesManifest": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "type": "object"
+          },
+          "discovery": {
+            "type": "object"
+          },
+          "authentication": {
+            "type": "object"
+          },
+          "state_model": {
+            "type": "object"
+          },
+          "preferred_agent_flow": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error", "code"],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "docs_url": {
+            "type": "string"
+          },
+          "openapi_url": {
+            "type": "string"
+          },
+          "llms_url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

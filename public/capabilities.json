@@ -1,0 +1,163 @@
+{
+  "product": {
+    "name": "玩吗 - 桌游DM",
+    "slug": "play-or-not-dm",
+    "description": "Board game recommendation and rule explanation app for gatherings, new players, and live referee-style follow-up questions.",
+    "last_updated": "2026-03-24"
+  },
+  "discovery": {
+    "homepage": "/",
+    "developers": "/developers/",
+    "llms": "/llms.txt",
+    "openapi": "/openapi.json"
+  },
+  "authentication": {
+    "public_api_surface": true,
+    "agent_api_keys": false,
+    "oauth_for_agents": false,
+    "human_login_ui": [
+      "email_verification_code"
+    ],
+    "notes": [
+      "Public agent-facing routes exist, but there is currently no separate API key issuance flow for agents.",
+      "Human account login now uses email verification codes with browser cookie sessions.",
+      "There is still no separate agent token issuance flow or public write-capable user API."
+    ]
+  },
+  "state_model": {
+    "chat": "stateless request/response; caller should send full messages history when continuity matters",
+    "preferences": "no public write API",
+    "session_persistence": "human login uses httpOnly browser session cookies; agent routes remain stateless"
+  },
+  "preferred_agent_flow": [
+    "Read /llms.txt or /developers/ for product boundary and route selection",
+    "Read /openapi.json or GET /api/chat for request schema hints",
+    "Use POST /api/chat for recommendation and rules tasks",
+    "Use POST /api/stt when audio needs to be transcribed first",
+    "Use GET /api/rag or POST /api/rag only when RAG health or lower-level retrieval access is needed"
+  ],
+  "capabilities": [
+    {
+      "id": "recommend_game",
+      "title": "Recommend a board game",
+      "route": "/api/chat",
+      "method": "POST",
+      "input_content_type": "application/json",
+      "required_fields": ["messages"],
+      "optional_fields": ["task", "temperature", "max_tokens", "model", "providerBaseUrl", "userApiKey"],
+      "task_hint": "recommend_game",
+      "best_for": [
+        "4-person icebreakers",
+        "short party games",
+        "date night picks",
+        "new player recommendations"
+      ],
+      "example_request": {
+        "task": "recommend_game",
+        "messages": [
+          {
+            "role": "user",
+            "content": "推荐一个适合 4 人破冰、30 分钟内能讲完规则的桌游"
+          }
+        ]
+      },
+      "output_shape": "OpenAI-compatible chat completion JSON"
+    },
+    {
+      "id": "explain_rules",
+      "title": "Explain rules or winning conditions",
+      "route": "/api/chat",
+      "method": "POST",
+      "input_content_type": "application/json",
+      "required_fields": ["messages"],
+      "task_hint": "explain_rules",
+      "best_for": [
+        "winning condition questions",
+        "tie-break rules",
+        "turn flow explanations",
+        "common FAQ-style follow-ups"
+      ],
+      "example_request": {
+        "task": "explain_rules",
+        "messages": [
+          {
+            "role": "user",
+            "content": "德国心脏病怎么赢？"
+          }
+        ]
+      },
+      "output_shape": "OpenAI-compatible chat completion JSON"
+    },
+    {
+      "id": "referee_followup",
+      "title": "Handle live referee-style follow-ups",
+      "route": "/api/chat",
+      "method": "POST",
+      "input_content_type": "application/json",
+      "required_fields": ["messages"],
+      "task_hint": "referee_followup",
+      "notes": [
+        "Best results come when the caller includes recent turns or the active game name in messages history."
+      ],
+      "example_request": {
+        "task": "referee_followup",
+        "messages": [
+          {
+            "role": "user",
+            "content": "如果两个人同时拍牌，德国心脏病怎么算？"
+          }
+        ]
+      },
+      "output_shape": "OpenAI-compatible chat completion JSON"
+    },
+    {
+      "id": "transcribe_audio",
+      "title": "Transcribe audio to text",
+      "route": "/api/stt",
+      "method": "POST",
+      "input_content_type": "multipart/form-data",
+      "required_fields": ["file"],
+      "output_shape": "JSON with text or upstream transcription fields"
+    },
+    {
+      "id": "check_rag_health",
+      "title": "Check RAG service health",
+      "route": "/api/rag",
+      "method": "GET",
+      "output_shape": "JSON health payload from the Python RAG service"
+    },
+    {
+      "id": "query_rag",
+      "title": "Query the Python RAG service through the proxy",
+      "route": "/api/rag",
+      "method": "POST",
+      "input_content_type": "application/json",
+      "output_shape": "JSON response from the Python RAG service"
+    },
+    {
+      "id": "send_email_code",
+      "title": "Send a human login verification code",
+      "route": "/api/auth/email/send",
+      "method": "POST",
+      "input_content_type": "application/json",
+      "required_fields": ["email"],
+      "output_shape": "JSON with masked_email, delivery_mode, and cooldown metadata"
+    },
+    {
+      "id": "verify_email_code",
+      "title": "Verify a human login verification code",
+      "route": "/api/auth/email/verify",
+      "method": "POST",
+      "input_content_type": "application/json",
+      "required_fields": ["email", "code"],
+      "output_shape": "JSON with authenticated=true and browser session cookie side effect"
+    },
+    {
+      "id": "get_auth_session",
+      "title": "Read the current browser auth session",
+      "route": "/api/auth/session",
+      "method": "GET",
+      "output_shape": "JSON with authenticated flag and current email user"
+    }
+  ]
+}
