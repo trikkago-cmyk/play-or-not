@@ -1,0 +1,49 @@
+name: RAG quality gap
+description: Report a recommendation/referee retrieval miss, weak evidence pack, or low-quality recall case.
+title: "[RAG] "
+labels:
+  - area:rag
+  - eval
+body:
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - recommendation
+        - referee
+    validations:
+      required: true
+  - type: input
+    id: query
+    attributes:
+      label: Query
+      description: Paste the exact user query.
+      placeholder: 推荐一个2-4人的桌游
+    validations:
+      required: true
+  - type: input
+    id: active_game
+    attributes:
+      label: Active game
+      description: Required for referee cases when relevant.
+      placeholder: halli-galli
+  - type: textarea
+    id: bad_result
+    attributes:
+      label: Current bad result
+      description: What did the system retrieve or answer, and why is it wrong or weak?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected candidate(s) or evidence
+      description: Which game IDs, sections, or evidence should have appeared instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction notes
+      description: Include environment, screenshots, eval case idea, or raw payloads if available.

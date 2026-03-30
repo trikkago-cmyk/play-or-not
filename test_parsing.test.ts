@@ -24,19 +24,48 @@ describe('LLM Response Parsing Golden Datasets', () => {
         }) as any;
     };
 
-    it('Golden Dataset 1: Should prioritize JSON recommendation_id over text hallucination', async () => {
+    it('Golden Dataset 1: Should prioritize the explicitly named game in the reply over a conflicting JSON recommendation_id', async () => {
         const payload = {
             thought: "由于用户提到了农场主，所以我推荐同一等级的经典游戏波多黎各",
             reply: "既然你喜欢《农场主》这种深度策略游戏，那我正经推荐一款：\n\n《波多黎各》\n\n- 经典德式策略",
             recommendation_name: "波多黎各",
-            recommendation_id: "puerto-rico"
+            recommendation_id: "avalon"
         };
 
-        (global.fetch as any).mockImplementation(() => createMockResponse(payload));
+        (global.fetch as any).mockImplementation((input: RequestInfo | URL) => {
+            const url = String(input);
 
-        const result = await getLLMResponse('我喜欢农场主', 'recommendation');
+            if (url.includes('/api/rag')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve({
+                        hits: [
+                            {
+                                chunk_id: 'puerto-rico:recommendation:1',
+                                document_id: 'recommendation:puerto-rico',
+                                title: '波多黎各',
+                                text: '3到5人，中重策，经典德式经营与角色选择。',
+                                section_title: '适合场景',
+                                distance: 0.12,
+                                score: 1.18,
+                                metadata: {
+                                    game_id: 'puerto-rico',
+                                    mode: 'recommendation',
+                                    section_title: '适合场景',
+                                },
+                            },
+                        ],
+                    }),
+                }) as any;
+            }
 
-        // Expect the ID to be explicitly puerto-rico, NOT agricola
+            return createMockResponse(payload);
+        });
+
+        const result = await getLLMResponse('想玩一款经典德式中重策', 'recommendation');
+
+        // Current guardrail trusts the game explicitly named in the visible reply text
+        // when that game also belongs to the retrieved candidate pool.
         expect(result.gameId).toBe('puerto-rico');
     });
 

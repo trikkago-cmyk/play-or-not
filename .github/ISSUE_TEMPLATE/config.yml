@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Live demo
+    url: https://play-or-not-dm.vercel.app/
+    about: Reproduce the issue in the current deployment.
+  - name: Agent-friendly docs
+    url: https://play-or-not-dm.vercel.app/developers/
+    about: Check public API surface and developer-facing capability notes first.

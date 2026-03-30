@@ -1,0 +1,68 @@
+name: Bug report
+description: Report a broken flow, UI regression, auth issue, API bug, or deployment problem.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - frontend
+        - recommendation
+        - referee
+        - rag
+        - tts
+        - stt
+        - auth
+        - deploy
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - production
+        - preview
+        - local
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: A short summary of the bug.
+      placeholder: The system recommended the wrong game / the page froze / email login failed...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Keep this concrete and copyable.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Ask ...
+        4. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Screenshots, logs, or response payloads
+      description: Paste anything useful here.
