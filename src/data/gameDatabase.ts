@@ -1,5 +1,7 @@
 import type { Game } from '@/types';
 import { GAME_DATABASE_AUTO_EXPANSION } from './gameDatabaseAutoExpansion';
+import { GAME_DATABASE_CATALOG_EXPANSION } from './gameDatabaseCatalogExpansion';
+import { GAME_DATABASE_CATALOG_RULE_SUPPLEMENTS } from './gameDatabaseCatalogRuleSupplements';
 import { GAME_DATABASE_EXPANSION } from './gameDatabaseExpansion';
 import { normalizeGameDatabase } from './gameDatabaseUtils';
 
@@ -26,7 +28,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '德国心脏病',
     titleEn: 'Halli Galli',
     bilibiliId: 'BV1Wd2LYCEkN',
-    coverUrl: 'https://cf.geekdo-images.com/gm-LiZvjkluOeKqPvuUjDg__itemrep/img/J8WiccTd8JRHlry8uCivEvLrflc=/fit-in/246x300/filters:strip_icc()/pic8223481.jpg',
+    coverUrl: '/game-covers/halli-galli.jpg',
     minPlayers: 2,
     maxPlayers: 6,
     playtimeMin: 15,
@@ -72,7 +74,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: 'UNO (优诺)',
     titleEn: 'UNO',
     bilibiliId: 'BV18V411o7gB',
-    coverUrl: 'https://cf.geekdo-images.com/-DHiHBBSnvaLu0Do8CIykQ__itemrep/img/m4GOPbjQ_C6lclrlQQqvLkVtyo8=/fit-in/246x300/filters:strip_icc()/pic8204165.jpg',
+    coverUrl: '/game-covers/uno.jpg',
     minPlayers: 2,
     maxPlayers: 10,
     playtimeMin: 15,
@@ -121,7 +123,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '爆炸猫',
     titleEn: 'Exploding Kittens',
     bilibiliId: 'BV1db411N7aE',
-    coverUrl: 'https://cf.geekdo-images.com/N8bL53-pRU7zaXDTrEaYrw__itemrep/img/ON0bQporMQQ9KJlVC2UP8LAa_WI=/fit-in/246x300/filters:strip_icc()/pic2691976.png',
+    coverUrl: '/game-covers/exploding-kittens.png',
     minPlayers: 2,
     maxPlayers: 5,
     playtimeMin: 15,
@@ -167,7 +169,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '哆宝 (Dobble)',
     titleEn: 'Spot It!',
     bilibiliId: 'BV1D54y127Vb',
-    coverUrl: 'https://cf.geekdo-images.com/hqDT4HbEb2eNCyMOeiGj-g__itemrep/img/vxMVCMLOIutFnpSi7Scqvrjrr0E=/fit-in/246x300/filters:strip_icc()/pic6477003.png',
+    coverUrl: '/game-covers/dobble.png',
     minPlayers: 2,
     maxPlayers: 8,
     playtimeMin: 10,
@@ -217,7 +219,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '阿瓦隆',
     titleEn: 'The Resistance: Avalon',
     bilibiliId: 'BV1Ym4y1Q7Gq',
-    coverUrl: 'https://cf.geekdo-images.com/LPa6rsGcv8S0-OeNjCOAEQ__itemrep/img/KtGX_JFWNUXci7H5zs7GjS0QrQk=/fit-in/246x300/filters:strip_icc()/pic1398895.jpg',
+    coverUrl: '/game-covers/avalon.jpg',
     minPlayers: 5,
     maxPlayers: 10,
     playtimeMin: 30,
@@ -267,7 +269,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '一夜终极狼人',
     titleEn: 'One Night Ultimate Werewolf',
     bilibiliId: 'BV1S4411p7fc',
-    coverUrl: 'https://cf.geekdo-images.com/rqLju4uaZq-G9z4g91aPPQ__itemrep/img/WJfvsbdiVZ-amU0a7sstTVZiEUl=/fit-in/246x300/filters:strip_icc()/pic8783294.png',
+    coverUrl: '/game-covers/werewolf-one-night.svg',
     minPlayers: 3,
     maxPlayers: 10,
     playtimeMin: 10,
@@ -313,7 +315,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '璀璨宝石',
     titleEn: 'Splendor',
     bilibiliId: 'BV1pD4y1o7ta',
-    coverUrl: 'https://cf.geekdo-images.com/vNFe4JkhKAERzi4T0Ntwpw__itemrep/img/OoBoVLPl4ZYiNioNIKlV_0HLEYQ=/fit-in/246x300/filters:strip_icc()/pic8234167.png',
+    coverUrl: '/game-covers/splendor.png',
     minPlayers: 2,
     maxPlayers: 4,
     playtimeMin: 30,
@@ -363,7 +365,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '卡卡颂',
     titleEn: 'Carcassonne',
     bilibiliId: 'BV1ft411x7pt',
-    coverUrl: 'https://cf.geekdo-images.com/peUgu3A20LRmAXAMyDQfpQ__itemrep/img/6TWoEvnQQe_sO--6WLd_PQOnEQg=/fit-in/246x300/filters:strip_icc()/pic8621446.jpg',
+    coverUrl: '/game-covers/carcassonne.jpg',
     minPlayers: 2,
     maxPlayers: 5,
     playtimeMin: 35,
@@ -410,7 +412,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '车票之旅',
     titleEn: 'Ticket to Ride',
     bilibiliId: 'BV1Hf4y1Y7LV',
-    coverUrl: 'https://cf.geekdo-images.com/kdWYkW-7AqG63HhqPL6ekA__itemrep/img/OYmwWIZ8MCn3aDAiywQ1fG7UY6E=/fit-in/246x300/filters:strip_icc()/pic8937637.jpg',
+    coverUrl: '/game-covers/ticket-to-ride.jpg',
     minPlayers: 2,
     maxPlayers: 5,
     playtimeMin: 45,
@@ -454,7 +456,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '花砖物语',
     titleEn: 'Azul',
     bilibiliId: 'BV1Ns411P7cS',
-    coverUrl: 'https://upload.wikimedia.org/wikipedia/en/2/23/Picture_of_Azul_game_box.jpg',
+    coverUrl: '/game-covers/azul.jpg',
     minPlayers: 2,
     maxPlayers: 4,
     playtimeMin: 30,
@@ -504,7 +506,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '卡坦岛',
     titleEn: 'Catan',
     bilibiliId: 'BV1Rb411679e',
-    coverUrl: 'https://cf.geekdo-images.com/0XODRpReiZBFUffEcqT5-Q__itemrep/img/6Ed-INTd8Hitxi6gOJugeSBFHQE=/fit-in/246x300/filters:strip_icc()/pic9156909.png',
+    coverUrl: '/game-covers/catan.svg',
     minPlayers: 3,
     maxPlayers: 4,
     playtimeMin: 60,
@@ -557,7 +559,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '心灵同步',
     titleEn: 'The Mind',
     bilibiliId: 'BV118411s7VV',
-    coverUrl: 'https://cf.geekdo-images.com/q_JGK291hrhnhiRB0667oA__itemrep/img/w6x_ahGLQVe2u6trDx0kO91OprM=/fit-in/246x300/filters:strip_icc()/pic3979766.png',
+    coverUrl: '/game-covers/the-mind.png',
     minPlayers: 2,
     maxPlayers: 4,
     playtimeMin: 15,
@@ -604,7 +606,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '瘟疫危机',
     titleEn: 'Pandemic',
     bilibiliId: 'BV1D7411L7YA',
-    coverUrl: 'https://cf.geekdo-images.com/S3ybV1LAp-8SnHIXLLjVqA__itemrep/img/wAMLbgihOl7dJDHnvqt7OXKEV-4=/fit-in/246x300/filters:strip_icc()/pic1534148.jpg',
+    coverUrl: '/game-covers/pandemic.jpg',
     minPlayers: 2,
     maxPlayers: 4,
     playtimeMin: 45,
@@ -648,7 +650,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '花火',
     titleEn: 'Hanabi',
     bilibiliId: 'BV16P4y197xc',
-    coverUrl: 'https://cf.geekdo-images.com/JDVksMwfcqoem1k_xtZrOA__itemrep/img/-8TE91boynDg5reWQGyIkc7Wx6I=/fit-in/246x300/filters:strip_icc()/pic2007286.jpg',
+    coverUrl: '/game-covers/hanabi.jpg',
     minPlayers: 2,
     maxPlayers: 5,
     playtimeMin: 25,
@@ -691,7 +693,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '圣托里尼',
     titleEn: 'Santorini',
     bilibiliId: 'BV1Ay4y1h7Lo',
-    coverUrl: 'https://cf.geekdo-images.com/665Ply7Ho1WVf1v1iZlWeg__itemrep/img/8vG-UtGeFbhMXPTzLDUOqWot8hA=/fit-in/246x300/filters:strip_icc()/pic3283110.png',
+    coverUrl: '/game-covers/santorini.png',
     minPlayers: 2,
     maxPlayers: 2,
     playtimeMin: 20,
@@ -736,7 +738,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '拼布艺术',
     titleEn: 'Patchwork',
     bilibiliId: 'BV1b1uQewEUR',
-    coverUrl: 'https://cf.geekdo-images.com/xNSaIHCKr_cc7Q2rQSSJPQ__itemrep/img/RvOH_6Uwg6joioIwji5vDCrsMu4=/fit-in/246x300/filters:strip_icc()/pic9273518.jpg',
+    coverUrl: '/game-covers/patchwork.jpg',
     minPlayers: 2,
     maxPlayers: 2,
     playtimeMin: 30,
@@ -782,7 +784,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '七大奇迹：对决',
     titleEn: '7 Wonders Duel',
     bilibiliId: 'BV1EF411z7Qg',
-    coverUrl: 'https://cf.geekdo-images.com/zdagMskTF7wJBPjX74XsRw__itemrep/img/x5L93n_pSsxfFZ0Ir-JqtjLf-Jw=/fit-in/246x300/filters:strip_icc()/pic2576399.jpg',
+    coverUrl: '/game-covers/7-wonders-duel.jpg',
     minPlayers: 2,
     maxPlayers: 2,
     playtimeMin: 30,
@@ -823,7 +825,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '杰普尔',
     titleEn: 'Jaipur',
     bilibiliId: 'BV1V44y1f7SJ',
-    coverUrl: 'https://cf.geekdo-images.com/_LTujSe_o16nvjDC-J0seA__itemrep/img/gSigdzXaUWvudQ0vJjSbs-mXaRk=/fit-in/246x300/filters:strip_icc()/pic5100947.jpg',
+    coverUrl: '/game-covers/jaipur.jpg',
     minPlayers: 2,
     maxPlayers: 2,
     playtimeMin: 30,
@@ -873,7 +875,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '行动代号',
     titleEn: 'Codenames',
     bilibiliId: 'BV1ox411S7fe',
-    coverUrl: 'https://cf.geekdo-images.com/nC6ifPCDnAItwoKSKXVrnw__itemrep/img/iM9m6bb1zTCzDzkXhiKE5V1gomc=/fit-in/246x300/filters:strip_icc()/pic8907965.jpg',
+    coverUrl: '/game-covers/codenames.jpg',
     minPlayers: 4,
     maxPlayers: 8,
     playtimeMin: 15,
@@ -916,7 +918,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '只言片语',
     titleEn: 'Dixit',
     bilibiliId: 'BV1f54y197wq',
-    coverUrl: 'https://cf.geekdo-images.com/J0PlHArkZDJ57H-brXW2Fw__itemrep/img/tsmN3sAHJ6trDaWNbq08BZXtq7g=/fit-in/246x300/filters:strip_icc()/pic6738336.jpg',
+    coverUrl: '/game-covers/dixit.jpg',
     minPlayers: 3,
     maxPlayers: 6,
     playtimeMin: 30,
@@ -963,7 +965,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '拉斯维加斯',
     titleEn: 'Las Vegas',
     bilibiliId: 'BV18W4y1s7AZ',
-    coverUrl: 'https://cf.geekdo-images.com/aQJ0HRKxYLnfZtljfc2dRA__itemrep/img/9vJIc03rFs_bh6gBLHERw01s3Ds=/fit-in/246x300/filters:strip_icc()/pic1261796.jpg',
+    coverUrl: '/game-covers/las-vegas.jpg',
     minPlayers: 2,
     maxPlayers: 5,
     playtimeMin: 20,
@@ -1007,7 +1009,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '东京之王',
     titleEn: 'King of Tokyo',
     bilibiliId: 'BV1Hr4y1v7Ar',
-    coverUrl: 'https://cf.geekdo-images.com/m_RzXpHURC0_xLkvRSR_sw__itemrep/img/HVllMOifrnS8P1Ygzj7Teo_rwA4=/fit-in/246x300/filters:strip_icc()/pic3043734.jpg',
+    coverUrl: '/game-covers/king-of-tokyo.jpg',
     minPlayers: 2,
     maxPlayers: 6,
     playtimeMin: 30,
@@ -1056,7 +1058,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '谁是牛头王',
     titleEn: '6 nimmt!',
     bilibiliId: 'BV1Nt411o74j',
-    coverUrl: 'https://cf.geekdo-images.com/WuOY1XAIJQ-RGAmT_apW_w__itemrep/img/6Ed-INTd8Hitxi6gOJugeSBFHQE=/fit-in/246x300/filters:strip_icc()/pic8632998.jpg',
+    coverUrl: '/game-covers/6-nimmt.jpg',
     minPlayers: 2,
     maxPlayers: 10,
     playtimeMin: 45,
@@ -1102,7 +1104,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '不，谢谢',
     titleEn: 'No Thanks!',
     bilibiliId: 'BV17441187NY',
-    coverUrl: 'https://cf.geekdo-images.com/2P4-gR4xYLnfZtljfc2dRA__itemrep/img/f90ya2UREmtV8lTGkKzXTJyqXOg=/fit-in/246x300/filters:strip_icc()/pic2602161.jpg',
+    coverUrl: '/game-covers/no-thanks.jpg',
     minPlayers: 3,
     maxPlayers: 7,
     playtimeMin: 20,
@@ -1146,7 +1148,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '柯尔特快车',
     titleEn: 'Colt Express',
     bilibiliId: 'BV1jE411R7SQ',
-    coverUrl: 'https://cf.geekdo-images.com/2HKX0QANk_DY7CIVK5O5fQ__itemrep/img/TvYm-n4tYlxtLfE2iU-aBDeRC5I=/fit-in/246x300/filters:strip_icc()/pic2869710.jpg',
+    coverUrl: '/game-covers/colt-express.jpg',
     minPlayers: 2,
     maxPlayers: 6,
     playtimeMin: 40,
@@ -1187,7 +1189,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '骷髅牌',
     titleEn: 'Skull',
     bilibiliId: 'BV1tr4y1C7qD',
-    coverUrl: 'https://cf.geekdo-images.com/GVbKORueiHezUaLfVZKlfQ__itemrep/img/IIjNSyysVdQZVUN6FEICYee8bcA=/fit-in/246x300/filters:strip_icc()/pic9315848.jpg',
+    coverUrl: '/game-covers/skull.jpg',
     minPlayers: 3,
     maxPlayers: 6,
     playtimeMin: 15,
@@ -1228,7 +1230,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '情书',
     titleEn: 'Love Letter',
     bilibiliId: 'BV1mY411y7hk',
-    coverUrl: 'https://cf.geekdo-images.com/T1ltXwapFUtghS9A7_tf4g__itemrep/img/SJxpAXjBIPEj9m6hHZYeTbz9wzc=/fit-in/246x300/filters:strip_icc()/pic1401448.jpg',
+    coverUrl: '/game-covers/love-letter.jpg',
     minPlayers: 2,
     maxPlayers: 4,
     playtimeMin: 20,
@@ -1275,7 +1277,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '展翅翱翔',
     titleEn: 'Wingspan',
     bilibiliId: 'BV1BB4y1N7ui',
-    coverUrl: 'https://cf.geekdo-images.com/yLZJCVLlIx4c7eJEWUNJ7w__itemrep/img/DR7181wU4sHT6gn6Q1XccpPxNHg=/fit-in/246x300/filters:strip_icc()/pic4458123.jpg',
+    coverUrl: '/game-covers/wingspan.jpg',
     minPlayers: 1,
     maxPlayers: 5,
     playtimeMin: 40,
@@ -1333,7 +1335,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '殖民火星',
     titleEn: 'Terraforming Mars',
     bilibiliId: 'BV1Vz4y1f72o',
-    coverUrl: 'https://cf.geekdo-images.com/wg9oOLcsKvDesSUdZQ4rxw__itemrep/img/IwUOQfhP5c0KcRJBY4X_hi3LpsY=/fit-in/246x300/filters:strip_icc()/pic3536616.jpg',
+    coverUrl: '/game-covers/terraforming-mars.jpg',
     minPlayers: 1,
     maxPlayers: 5,
     playtimeMin: 120,
@@ -1391,7 +1393,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '卡卡颂',
     titleEn: 'Carcassonne',
     bilibiliId: 'BV1PZ4y187Hf',
-    coverUrl: 'https://cf.geekdo-images.com/okM0dqMEMelXMU6HQLlEzQ__itemrep/img/n-F27vRk2H0fP_EofmX1DrtL2vE=/fit-in/246x300/filters:strip_icc()/pic6544350.jpg',
+    coverUrl: '/game-covers/carcassonne.jpg',
     minPlayers: 2,
     maxPlayers: 5,
     playtimeMin: 45,
@@ -1411,7 +1413,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '璀璨宝石',
     titleEn: 'Splendor',
     bilibiliId: 'BV1pD4y1o7ta',
-    coverUrl: 'https://cf.geekdo-images.com/rwOMxx4q5yuElIvo-1-OFw__itemrep/img/y3aBqI1QO_xJb1L9mUaY_9p178E=/fit-in/246x300/filters:strip_icc()/pic1904079.jpg',
+    coverUrl: '/game-covers/splendor.png',
     minPlayers: 2,
     maxPlayers: 4,
     playtimeMin: 30,
@@ -1431,7 +1433,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '车票之旅',
     titleEn: 'Ticket to Ride',
     bilibiliId: 'BV1PC4y1h7Nj',
-    coverUrl: 'https://cf.geekdo-images.com/ZWJg0dCdrWHxVnc08CSvYQ__itemrep/img/1u0XQyO2GzV8l5xO9t0L6H78Qj4=/fit-in/246x300/filters:strip_icc()/pic38668.jpg',
+    coverUrl: '/game-covers/ticket-to-ride.jpg',
     minPlayers: 2,
     maxPlayers: 5,
     playtimeMin: 60,
@@ -1451,7 +1453,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '七大奇迹',
     titleEn: '7 Wonders',
     bilibiliId: 'BV144411a7vk',
-    coverUrl: 'https://cf.geekdo-images.com/RvFVQFVnO8-kPqF8_MhhwQ__itemrep/img/1Dk0M_n4A7qH8wXm9F8Yw3C6x74=/fit-in/246x300/filters:strip_icc()/pic860217.jpg',
+    coverUrl: '/game-covers/7-wonders.svg',
     minPlayers: 2,
     maxPlayers: 7,
     playtimeMin: 30,
@@ -1463,15 +1465,39 @@ const RAW_GAME_DATABASE: Game[] = [
     rules: { target: '最高分获胜（分为科技、战争、文化等各个领域得分）', flow: '选1张牌打出 -> 剩下的传给旁边 -> 继续', tips: '时刻关注你左右两边邻居缺什么资源。' },
     FAQ: '- **Q: 钱能买胜利点吗？**\n  - A: 游戏结束时每3块钱等于1分。',
     commonQuestions: ['怎么赢？', '科技怎么算分？'],
-    tutorialVideoUrl: '',
-    knowledgeBase: ''
+    tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=七大奇迹+桌游教学',
+    knowledgeBase: `
+## 1. 获胜目标
+- 游戏共 3 个时代，时代结束后按军事、科学、黄卡、蓝卡、公会、奇迹与金钱结算总分，最高分获胜。
+
+## 2. 回合流程
+1. 每个时代开始时，每人拿一手牌。
+2. 同时从手中选择 1 张牌，可用于：
+   - **建造建筑**：支付资源后放到自己面前。
+   - **建造奇迹阶段**：把牌压到奇迹下面，支付奇迹所需资源。
+   - **弃牌换钱**：拿 3 块钱。
+3. 所有人同时亮牌结算，然后把剩余手牌按时代指定方向传给邻居。
+4. 每个时代最后会结算一次军事冲突。
+
+## 3. 关键规则
+- **资源交易**：自己缺资源时，可以向左右邻居买，每个资源通常 2 块钱，部分黄卡能降低价格。
+- **连锁建造**：若你已有前置建筑上的连锁符号，可以免费建后续建筑。
+- **科学计分**：绿色科技卡既算“同符号平方分”，也算“不同符号套装分”，两种都要算。
+- **军事冲突**：只和左右邻居比红盾，赢的人拿胜利标记，输的人在后期会吃更多负分。
+
+## 4. 新手建议
+- 前两时代先把资源体系搭起来，不然后面很多高分牌会建不起。
+- 盯住左右邻居的资源颜色和军事强度，很多时候防守比贪分更重要。
+- 如果打科学路线，要尽早判断自己是冲套装还是冲同符号叠分。
+    `,
+    knowledgeTier: 'full'
   },
   {
     id: 'agricola',
     titleCn: '农场主',
     titleEn: 'Agricola',
     bilibiliId: 'BV1Zo4y1w72z',
-    coverUrl: 'https://cf.geekdo-images.com/x0qjPqZJm8qX-Wqf8_Ytww__itemrep/img/3-v01q5_z_T7j-_8Yx_5y58T0_=/fit-in/246x300/filters:strip_icc()/pic461048.jpg',
+    coverUrl: '/game-covers/agricola.svg',
     minPlayers: 1,
     maxPlayers: 5,
     playtimeMin: 120,
@@ -1483,15 +1509,40 @@ const RAW_GAME_DATABASE: Game[] = [
     rules: { target: '农场建设最均衡、得分最高的玩家获胜', flow: '放工人执行动作 -> 回家 -> 收成与喂养', tips: '永远把喂饱家人放在第一位，乞讨卡的惩罚非常严重（扣3分）。' },
     FAQ: '- **Q: 收获阶段怎么结算？**\n  - A: 先收割田地的作物，然后按人头付食物（每人2份），最后动物繁殖（至少2只的动物生1只崽）。',
     commonQuestions: ['怎么赢？', '怎么喂养？', '动物怎么繁殖？'],
-    tutorialVideoUrl: '',
-    knowledgeBase: ''
+    tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=农场主+桌游教学',
+    knowledgeBase: `
+## 1. 获胜目标
+- 游戏结束后按农田、牧场、作物、动物、家庭成员、房屋升级等项目综合计分，最高分获胜。
+- 分数强调“均衡经营”，空地、空房、没养动物都会扣分。
+
+## 2. 回合结构
+1. **翻开新行动格**：每轮会加入一个新动作，越往后越丰富。
+2. **依次放工人**：玩家轮流把家庭成员放到行动格，拿资源、盖房、播种、繁殖、扩大家庭等。
+3. **回家阶段**：所有工人收回。
+4. **收获阶段**（特定轮次）：
+   - 田地收成
+   - 喂养家人
+   - 动物繁殖
+
+## 3. 裁判判定要点
+- **行动格先到先得**：一个格被占后，本轮别人不能再用。
+- **扩大家庭前提**：通常需要先有空房间。
+- **喂养不足**：如果食物不够，可以烧炉灶做饭，最后实在不够就拿乞讨卡，每张 -3 分。
+- **动物繁殖**：同种动物至少 2 只才会生 1 只新崽，且必须有地方养。
+
+## 4. 新手建议
+- 开局先想清楚食物来源，不然一到收成就会崩。
+- 木头和芦苇常年紧张，早点布局扩房和围栏。
+- 农场主不是“专精某一路”，而是尽量让每个计分维度都别太难看。
+    `,
+    knowledgeTier: 'full'
   },
   {
     id: 'wingspan',
     titleCn: '展翅翱翔',
     titleEn: 'Wingspan',
     bilibiliId: 'BV1BB4y1N7ui',
-    coverUrl: 'https://cf.geekdo-images.com/yLZJCVLlIx4c7eJEWUNJ7w__itemrep/img/2q8X7m6y9Zc89WbYpZ0q_x2mK5I=/fit-in/246x300/filters:strip_icc()/pic4458123.jpg',
+    coverUrl: '/game-covers/wingspan.jpg',
     minPlayers: 1,
     maxPlayers: 5,
     playtimeMin: 60,
@@ -1510,7 +1561,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '沙丘：帝国',
     titleEn: 'Dune: Imperium',
     bilibiliId: 'BV1NL411M72Y',
-    coverUrl: 'https://cf.geekdo-images.com/PhjygpWSo-0labGrPBMyyg__itemrep/img/1U40zD4Qv0h1k2n_ySksVsh3U6I=/fit-in/246x300/filters:strip_icc()/pic5666597.jpg',
+    coverUrl: '/game-covers/dune-imperium.svg',
     minPlayers: 1,
     maxPlayers: 4,
     playtimeMin: 120,
@@ -1522,15 +1573,39 @@ const RAW_GAME_DATABASE: Game[] = [
     rules: { target: '最高分获胜 (达到或超过10分并撑过当轮)', flow: '抽卡 -> 玩家回合(派特使/打牌) -> 战斗阶段 -> 创造者阶段(补牌)', tips: '不要过于迷恋高级卡，能够优化牌库流转速度才是致胜关键；后期冲突战斗的分数至关重要。' },
     FAQ: '- **Q: 结盟标记可以被抢走吗？**\n  - A: 可以！只要你在该派系的影响力超过当前结盟者，你就可以拿走结盟标记及其附带的1分。',
     commonQuestions: ['怎么赢？', '战斗怎么结算？', '结盟标记怎么拿？'],
-    tutorialVideoUrl: '',
-    knowledgeBase: ''
+    tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=沙丘帝国+桌游教学',
+    knowledgeBase: `
+## 1. 获胜目标
+- 任意玩家达到或超过 10 分后，继续把该轮打完，分数最高者获胜。
+- 分数主要来自冲突奖励、派系联盟、委员会席位、剧情卡与部分高价值卡牌。
+
+## 2. 一轮流程
+1. **抽牌**：从牌库抽到手牌上限。
+2. **玩家行动阶段**：轮到你时二选一：
+   - **派遣特使**：打出一张带对应图标的牌，把工人派到一个版图位置并执行动作。
+   - **揭示回合**：不再派工人，打出剩余手牌的揭示效果，获得说服力买牌，并结算本轮战斗兵力。
+3. **冲突结算**：比较本轮投入战区的兵力，按名次拿奖励。
+4. **整备阶段**：回收工人，弃牌补牌，准备下一轮。
+
+## 3. 关键规则
+- **工放 + 卡组构筑绑定**：能不能去某个位置，不只看有没有工人，还看你打出的牌有没有对应图标。
+- **派系影响力**：皇帝、公会、贝尼杰瑟里特、弗雷曼达到阈值会给分；抢到该派系最高影响还能拿结盟标记。
+- **战斗兵力**：通过驻军、临时参战和揭示阶段加成共同组成，别只看场上士兵数。
+- **香料与水**：前期是节奏命根子，没这两个资源很多关键位置都进不去。
+
+## 4. 新手建议
+- 前中期别只看贵卡，先把“进场图标”和过牌效率做顺。
+- 冲突奖励分为“必须抢”和“可以放”，不要每轮都硬打。
+- 影响力和联盟分经常决定胜负，后期要主动算别人还能不能抢走你的结盟。
+    `,
+    knowledgeTier: 'full'
   },
   {
     id: 'puerto-rico',
     titleCn: '波多黎各',
     titleEn: 'Puerto Rico',
     bilibiliId: 'BV1SL4y1c753',
-    coverUrl: 'https://cf.geekdo-images.com/Bf2KxGzH_PioPxy-0fCrlg__itemrep/img/S2d5jZl5oM29tYI9hB1t75Mh53c=/fit-in/246x300/filters:strip_icc()/pic5516766.jpg',
+    coverUrl: '/game-covers/puerto-rico.svg',
     minPlayers: 3,
     maxPlayers: 5,
     playtimeMin: 90,
@@ -1542,15 +1617,43 @@ const RAW_GAME_DATABASE: Game[] = [
     rules: { target: '最高分获胜', flow: '选择职业 -> 该职业所有人依次执行(选择者有特权) -> 下一个人选职业', tips: '时刻关注别人生产了什么货物，不要让自己的货因为船满了而被扔进海里。' },
     FAQ: '- **Q: 游戏什么时候结束？**\n  - A: 当以下任一条件满足：1) 招聘市场没盲流了；2) 胜利分标志被拿光了；3) 有人建满了12个建筑格子。',
     commonQuestions: ['怎么赢？', '船装不下了怎么办？', '职业特权是什么？'],
-    tutorialVideoUrl: '',
-    knowledgeBase: ''
+    tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=波多黎各+桌游教学',
+    knowledgeBase: `
+## 1. 获胜目标
+- 通过种植、生产、出货、建设与大型建筑效果获取胜利点，游戏结束时分数最高者获胜。
+
+## 2. 回合结构
+1. 当前总督选择一个职业。
+2. 所有人都按顺时针依次执行这个职业动作，但**选择者有额外特权**。
+3. 已被选过的职业本轮不能再选，直到所有人都行动过后重置新一轮。
+
+## 3. 常见职业说明
+- **开拓者**：拿种植园；选择者可以优先拿采石场或更优地块。
+- **市长**：分配殖民者到建筑和种植园，没有殖民者的地块不生效。
+- **建筑师**：花钱盖建筑，采石场可减价。
+- **工匠**：按已启用的种植园与工厂生产货物。
+- **商人**：把一种货卖到交易所赚金币，交易所同种货通常不能重复。
+- **船长**：把货装船换胜利点，是主要得分来源。
+
+## 4. 裁判判定要点
+- **装船限制**：每艘船一次只装一种货，但不同船可以装不同货；若没有合法船位，该货可能被迫留在仓库或被弃。
+- **货物保存**：回合结束未保存的货会腐坏，只有仓库类建筑能保留更多。
+- **殖民者与启用状态**：建筑和种植园只有放上殖民者才算启用。
+- **游戏结束触发**：殖民者耗尽、胜利点耗尽、或任意玩家建满 12 格建筑都会触发终局。
+
+## 5. 新手建议
+- 这游戏核心不是“多赚钱”，而是把金币转成更高效的生产和出货分。
+- 选职业时一定要看全桌，很多时候你是在“送别人一轮大赚”。
+- 港口、仓库、大型建筑都很强，但前提是你的经济链条已经搭起来。
+    `,
+    knowledgeTier: 'full'
   },
   {
     id: 'avalon',
     titleCn: '阿瓦隆',
     titleEn: 'The Resistance: Avalon',
     bilibiliId: 'BV1Ym4y1Q7Gq',
-    coverUrl: 'https://cf.geekdo-images.com/ex8JMzzOO_hHk_29E0-42Q__itemrep/img/xP5e3bA18wXYHqC26V8Jm6p4P8M=/fit-in/246x300/filters:strip_icc()/pic1398895.jpg',
+    coverUrl: '/game-covers/avalon.jpg',
     minPlayers: 5,
     maxPlayers: 10,
     playtimeMin: 30,
@@ -1569,7 +1672,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '机密代号',
     titleEn: 'Codenames',
     bilibiliId: 'BV1Cv411u7sY',
-    coverUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Codenames_board_game.jpg/500px-Codenames_board_game.jpg',
+    coverUrl: '/game-covers/codenames.jpg',
     minPlayers: 2,
     maxPlayers: 8,
     playtimeMin: 15,
@@ -1589,7 +1692,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '只言片语',
     titleEn: 'Dixit',
     bilibiliId: 'BV1Xu411z7mP',
-    coverUrl: 'https://upload.wikimedia.org/wikipedia/en/thumb/9/90/Dixit_cover.jpg/220px-Dixit_cover.jpg',
+    coverUrl: '/game-covers/dixit.jpg',
     minPlayers: 3,
     maxPlayers: 6,
     playtimeMin: 30,
@@ -1609,7 +1712,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '染血钟楼',
     titleEn: 'Blood on the Clocktower',
     bilibiliId: 'BV1Ei4y1m7hd',
-    coverUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Blood_on_the_Clocktower_game_in_progress.jpg/500px-Blood_on_the_Clocktower_game_in_progress.jpg',
+    coverUrl: '/game-covers/blood-on-the-clocktower.jpg',
     minPlayers: 5,
     maxPlayers: 20,
     playtimeMin: 60,
@@ -1618,18 +1721,64 @@ const RAW_GAME_DATABASE: Game[] = [
     tags: ['终极推理', '死亡不离场', '说谎法则'],
     bestPlayerCount: [7, 8, 9, 10],
     oneLiner: '比起狼人杀更好玩、更硬核的身份推理，死了也能说话投票，充满谎言与逻辑的盛宴。',
-    rules: { target: '好人处决恶魔；坏人杀光好人（只剩两人）', flow: '夜晚闭眼 -> 恶魔杀人/角色技能 -> 白天公聊/私聊 -> 提名处决', tips: '不仅玩家可以说谎，有些机制（如中毒或醉酒）会导致说真话的法官也给你错误信息。' },
-    FAQ: '- **Q: 死了还能玩吗？**\n  - A: 能！死亡玩家不翻牌，保留最后一张幽灵票，并且可以全程参与讨论。',
-    commonQuestions: ['死亡玩家能干嘛？', '中毒是什么意思？'],
+    rules: {
+      target: '**好人阵营** 需要通过提名和处决把 **恶魔** 票死；**坏人阵营** 只要把场上存活人数压到只剩 2 人，就会立刻获胜。',
+      flow: '- **夜晚**：说书人依次唤醒对应角色，处理恶魔杀人和角色技能。\n- **白天**：全员公开聊，也可以私聊交换信息。\n- **提名 / 辩论 / 投票**：玩家可以发起提名，全员依次投票。\n- **处决结算**：当日票数最高且达到门槛的玩家被处决，然后进入下一晚。',
+      tips: '这游戏里 **玩家可以说谎**，而且 **中毒 / 醉酒** 会让你拿到错误信息。别把“听起来很真”直接当成真相。'
+    },
+    FAQ: `
+- **Q: 死了还能继续玩吗？**
+  - A: **能。** 死亡玩家不会立刻离场，依然可以全程参与讨论，并保留 **最后一张幽灵票**。
+- **Q: 死亡玩家还能一直投票吗？**
+  - A: **不能一直投。** 死亡后你只剩最后一票，什么时候交出去要想清楚。
+- **Q: 坏人什么时候直接赢？**
+  - A: 当场上存活人数被压到 **只剩 2 人** 时，坏人阵营立刻获胜。
+- **Q: 中毒 / 醉酒是什么意思？**
+  - A: 这两种状态都会让角色能力失真，你可能会收到错误信息，或者你的技能看似发动其实没有正常生效。
+`,
+    commonQuestions: ['死亡玩家能干嘛？', '死亡后还能投票吗？', '坏人什么时候直接赢？', '中毒是什么意思？'],
     tutorialVideoUrl: '',
-    knowledgeBase: ''
+    knowledgeBase: `
+## 1. 获胜目标
+- **好人阵营**：通过白天提名、辩论和投票，把真正的 **恶魔** 处决掉。
+- **坏人阵营**：只要场上存活人数被压到 **2 人**，坏人会 **立刻获胜**，哪怕恶魔还没被票出。
+
+## 2. 一天的标准流程
+1. **夜晚阶段**
+   - 所有人闭眼。
+   - 说书人依照脚本顺序唤醒角色，处理侦查、换位、下毒、杀人等技能。
+2. **白天讨论**
+   - 全员公开聊，也允许私聊交换情报。
+   - 玩家可以主动带节奏，也可以故意藏信息或说谎。
+3. **提名与投票**
+   - 玩家可以提名某人上票台。
+   - 被提名者先自辩，然后从提名者开始顺时针依次投票。
+   - 票数达到门槛且是当日最高票时，该玩家会被处决。
+4. **进入下一晚**
+   - 处决结算后，如果游戏还没结束，就进入下一轮夜晚。
+
+## 3. 死亡玩家规则
+- 死亡玩家 **不会离场**，仍然可以继续发言、带节奏、误导或帮助队友分析。
+- 但死亡后只保留 **最后一张幽灵票**；用掉之后，后面就不能再投票了。
+- 因此“什么时候交出死后那一票”本身就是很关键的博弈。
+
+## 4. 中毒与醉酒
+- 这两种状态的核心影响都是：**你的角色能力不再可靠**。
+- 你可能会收到错误信息，也可能以为自己能力生效了，但其实结果已经被扭曲。
+- 所以在染血钟楼里，**信息冲突并不等于有人一定在撒谎**，也可能是状态效果在作祟。
+
+## 5. 和狼人杀最大的不同
+- 死亡后仍能继续参与讨论。
+- 游戏更依赖说书人控场和脚本角色技能。
+- “说真话的人也可能给出假信息”，因为中毒 / 醉酒会污染信息链。
+`
   },
   {
     id: 'terraforming-mars',
     titleCn: '殖民火星',
     titleEn: 'Terraforming Mars',
     bilibiliId: 'BV1Vz4y1f72o',
-    coverUrl: 'https://upload.wikimedia.org/wikipedia/en/thumb/0/08/Terraforming_Mars.jpg/220px-Terraforming_Mars.jpg',
+    coverUrl: '/game-covers/terraforming-mars.jpg',
     minPlayers: 1,
     maxPlayers: 5,
     playtimeMin: 120,
@@ -1653,7 +1802,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '勃根地城堡',
     titleEn: 'The Castles of Burgundy',
     bilibiliId: 'BV1nV411n7GZ',
-    coverUrl: 'https://cf.geekdo-images.com/5CFwjd8zTcGYVUnkXh04hw__itemrep/img/N8btACZBpGSoIO3pc_dZyDH9Y5U=/fit-in/246x300/filters:strip_icc()/pic6601834.jpg',
+    coverUrl: '/game-covers/castles-of-burgundy.svg',
     minPlayers: 2,
     maxPlayers: 4,
     playtimeMin: 90,
@@ -1677,7 +1826,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '香料之路',
     titleEn: 'Century: Spice Road',
     bilibiliId: 'BV1aQ4y1S7TY',
-    coverUrl: 'https://cf.geekdo-images.com/Juo2PGoMT4VOMWOGnyxQGQ__itemrep/img/eE2VfXz4rVVc_nBjKDv2FZLyXmw=/fit-in/246x300/filters:strip_icc()/pic3913443.jpg',
+    coverUrl: '/game-covers/century-spice-road.svg',
     minPlayers: 2,
     maxPlayers: 5,
     playtimeMin: 30,
@@ -1701,7 +1850,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '现代艺术',
     titleEn: 'Modern Art',
     bilibiliId: 'BV1ii4y1Z7FF',
-    coverUrl: 'https://cf.geekdo-images.com/dNpgMsSSG1k-aS5J1d4uDA__itemrep/img/Mf1o4HrcYr8lZ3v4MGKN6kWwW_0=/fit-in/246x300/filters:strip_icc()/pic3457565.jpg',
+    coverUrl: '/game-covers/modern-art.svg',
     minPlayers: 3,
     maxPlayers: 5,
     playtimeMin: 45,
@@ -1725,7 +1874,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '马尼拉',
     titleEn: 'Manila',
     bilibiliId: 'BV11w411q7LE',
-    coverUrl: 'https://cf.geekdo-images.com/UBmeLkfxKYz_q701pH-vvQ__itemrep/img/W2KJkHaO92QqJGlASCZlqfrzmKs=/fit-in/246x300/filters:strip_icc()/pic3467142.jpg',
+    coverUrl: '/game-covers/manila.svg',
     minPlayers: 3,
     maxPlayers: 5,
     playtimeMin: 60,
@@ -1749,7 +1898,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '骰子街',
     titleEn: 'Machi Koro',
     bilibiliId: 'BV1BZ4y1K7VE',
-    coverUrl: 'https://cf.geekdo-images.com/sQaaVDNfdPMliYUSlrMV-Q__itemrep/img/n_OcVS6fNjxQkSh1cRuy1a7LQSQ=/fit-in/246x300/filters:strip_icc()/pic6919083.jpg',
+    coverUrl: '/game-covers/machi-koro.svg',
     minPlayers: 2,
     maxPlayers: 4,
     playtimeMin: 30,
@@ -1773,7 +1922,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: 'Scout',
     titleEn: 'SCOUT!',
     bilibiliId: 'BV1KeS3BYEyy',
-    coverUrl: 'https://cf.geekdo-images.com/cf0xxkevbwTGF3VUZymKjg__itemrep/img/FhSoJdStBYjlNWUK0JLPLzFanOc=/fit-in/246x300/filters:strip_icc()/pic6398727.png',
+    coverUrl: '/game-covers/scout.svg',
     minPlayers: 2,
     maxPlayers: 5,
     playtimeMin: 15,
@@ -1797,7 +1946,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '骆驼大赛',
     titleEn: 'Camel Up',
     bilibiliId: 'BV1q4411m7kS',
-    coverUrl: 'https://cf.geekdo-images.com/3dg9z4lSGqbBOLqky8LJQA__itemrep/img/O1I-VNj6j7HDJewuV9TlxK0fK94=/fit-in/246x300/filters:strip_icc()/pic6289945.jpg',
+    coverUrl: '/game-covers/camel-up.svg',
     minPlayers: 3,
     maxPlayers: 8,
     playtimeMin: 30,
@@ -1821,7 +1970,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '我是大老板',
     titleEn: "I'm the Boss!",
     bilibiliId: 'BV1ajarzvEwY',
-    coverUrl: 'https://cf.geekdo-images.com/avBHbIWUixef8qb7O8WlBQ__itemrep/img/ZmjH0FzjWa96TrSpL11S5P_hv4I=/fit-in/246x300/filters:strip_icc()/pic56741.jpg',
+    coverUrl: '/game-covers/im-the-boss.svg',
     minPlayers: 3,
     maxPlayers: 6,
     playtimeMin: 60,
@@ -1845,7 +1994,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '富饶之城',
     titleEn: 'Citadels',
     bilibiliId: 'BV1ub411t7gE',
-    coverUrl: 'https://cf.geekdo-images.com/42iW4E-vOumFXRQAiSFbOQ__itemrep/img/i0Kk6cFDm4V1ikCRWqTUBJFdWpQ=/fit-in/246x300/filters:strip_icc()/pic3239104.jpg',
+    coverUrl: '/game-covers/citadels.svg',
     minPlayers: 2,
     maxPlayers: 8,
     playtimeMin: 45,
@@ -1869,7 +2018,7 @@ const RAW_GAME_DATABASE: Game[] = [
     titleCn: '风声',
     titleEn: 'The Message',
     bilibiliId: 'BV1yS4y157Fc',
-    coverUrl: 'https://cf.geekdo-images.com/dHfXsi6yykyiZjfVoAxXOQ__itemrep/img/QP-4DOjb9i6wBfJSSBFyIhbNd7c=/fit-in/246x300/filters:strip_icc()/pic1136710.jpg',
+    coverUrl: '/game-covers/the-message.svg',
     minPlayers: 3,
     maxPlayers: 9,
     playtimeMin: 30,
@@ -1894,4 +2043,6 @@ export const GAME_DATABASE: Game[] = normalizeGameDatabase([
   ...RAW_GAME_DATABASE,
   ...GAME_DATABASE_EXPANSION,
   ...GAME_DATABASE_AUTO_EXPANSION,
+  ...GAME_DATABASE_CATALOG_EXPANSION,
+  ...GAME_DATABASE_CATALOG_RULE_SUPPLEMENTS,
 ]);

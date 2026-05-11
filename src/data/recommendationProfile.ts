@@ -30,6 +30,7 @@ export const RECOMMENDATION_TAG_VOCABULARY = {
     '抽象对战',
     '路线规划',
     '纸笔规划',
+    '拍卖竞价',
     '拍卖押注',
     '骰子驱动',
     '角色技能',
@@ -59,7 +60,7 @@ const FACET_RULES: FacetRule[] = [
   {
     facet: 'occasionTags',
     tag: '团建破冰',
-    aliases: ['破冰', '团队配合', '默契', '默契测试', '眼神交流', '猜词', '看图说话', '文字联想'],
+    aliases: ['破冰', '猜词', '看图说话', '文字联想', '开场热场'],
     searchTerms: ['破冰', '聊天', '说话', '开场'],
   },
   {
@@ -163,13 +164,20 @@ const FACET_RULES: FacetRule[] = [
   {
     facet: 'mechanicTags',
     tag: '纸笔规划',
-    aliases: ['纸笔', '规划', '多人同玩', '同时进行', '同时开玩', '同步行动', '写写画画'],
+    aliases: ['纸笔', '多人同玩', '同时进行', '同时开玩', '同步行动', '写写画画', 'roll and write', 'flip and write'],
     searchTerms: ['纸笔', '同时进行', '同步行动', '多人同玩', '写写画画'],
   },
   {
     facet: 'mechanicTags',
+    tag: '拍卖竞价',
+    aliases: ['拍卖', '竞价', '竞拍', '拍卖博弈', '拍卖机制'],
+    searchTerms: ['拍卖', '竞价', '竞拍', '市场'],
+  },
+  {
+    facet: 'mechanicTags',
     tag: '拍卖押注',
-    aliases: ['拍卖', '押注', '豪赌', '赌狗必玩', '运气比拼'],
+    aliases: ['押注', '豪赌', '赌狗必玩', '运气比拼', '看脸豪赌'],
+    searchTerms: ['押注', '豪赌', '运气', '看脸'],
   },
   {
     facet: 'mechanicTags',
@@ -437,7 +445,8 @@ export function buildRecommendationProfile(game: Game): RecommendationProfile {
   addPlayerAndDurationTags(game, profile);
 
   for (const rule of FACET_RULES) {
-    if (containsAlias(searchCorpus, rule.aliases.map((alias) => alias.toLowerCase()))) {
+    const normalizedAliases = uniqueStrings([rule.tag, ...rule.aliases]).map((alias) => alias.toLowerCase());
+    if (containsAlias(searchCorpus, normalizedAliases)) {
       addFacetTag(profile, rule.facet, rule.tag, rule.searchTerms ?? []);
     }
   }
