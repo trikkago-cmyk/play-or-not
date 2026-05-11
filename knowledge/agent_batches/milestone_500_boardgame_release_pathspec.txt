@@ -1,0 +1,10 @@
+knowledge/boardgame_kb.jsonl
+knowledge/boardgame_kb_sections.jsonl
+knowledge/boardgame_recommendation_kb.jsonl
+public/game-covers/
+src/data/gameDatabase.ts
+src/data/gameDatabaseAutoExpansion.ts
+src/data/gameDatabaseCatalogExpansion.ts
+src/data/gameDatabaseCatalogRuleSupplements.ts
+src/data/gameDatabaseExpansion.ts
+src/data/recommendationProfile.ts

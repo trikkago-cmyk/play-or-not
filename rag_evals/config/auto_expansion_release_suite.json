@@ -1,0 +1,51 @@
+{
+  "adapter_config": "python_rag_function.example.json",
+  "report_dir": "../reports/auto_expansion_release",
+  "suites": [
+    {
+      "name": "auto_expansion_recommendation",
+      "groups": ["auto-expansion", "recommendation"],
+      "dataset": "../data/auto_expansion_recommendation_eval_cases.jsonl",
+      "top_k": 5,
+      "default_threshold": 1.0,
+      "min_metrics": {
+        "pass_rate": 1.0,
+        "strict_hit_at_k": 1.0
+      }
+    },
+    {
+      "name": "auto_expansion_referee",
+      "groups": ["auto-expansion", "referee", "referee-primary"],
+      "dataset": "../data/auto_expansion_referee_primary_eval_cases.jsonl",
+      "top_k": 5,
+      "default_threshold": 1.0,
+      "min_metrics": {
+        "pass_rate": 1.0,
+        "strict_hit_at_k": 1.0,
+        "top_1_section_pass_rate": 1.0
+      }
+    },
+    {
+      "name": "auto_expansion_referee_flow",
+      "groups": ["auto-expansion", "referee", "referee-flow"],
+      "dataset": "../data/auto_expansion_referee_flow_eval_cases.jsonl",
+      "top_k": 5,
+      "default_threshold": 1.0,
+      "min_metrics": {
+        "pass_rate": 0.98,
+        "strict_hit_at_k": 1.0,
+        "top_1_section_pass_rate": 0.98
+      }
+    },
+    {
+      "name": "auto_expansion_referee_faq",
+      "groups": ["auto-expansion", "referee", "referee-faq"],
+      "dataset": "../data/auto_expansion_referee_faq_eval_cases.jsonl",
+      "top_k": 5,
+      "default_threshold": 1.0,
+      "min_metrics": {
+        "strict_hit_at_k": 1.0
+      }
+    }
+  ]
+}
