@@ -1,6 +1,6 @@
 # Milestone 500 Release Staged Plan
 
-Snapshot time: `2026-05-11 19:20:00 +08:00`
+Snapshot time: `2026-05-11 22:05:00 +08:00`
 
 ## Scope
 
@@ -11,19 +11,18 @@ It intentionally tracks the frozen conservative release candidate and should be 
 ## Current position
 
 - Release workspace: `/Users/yusijua/Downloads/app-2-boardgame-release`
-- Release branch: `codex/boardgame-release-484`
-- Frozen boardgame release snapshot in this repo: `484 / 500`
-- Main mixed workspace milestone: `494 / 500`
-- Main workspace latest accepted delta beyond this release snapshot: batch `072` merged five rows (`ancientknowledge`, `fiftyfirststate`, `flamingpyramids`, `kamon`, `carnuta`)
+- Release branch: `codex/release-500-slice-1`
+- Frozen boardgame release snapshot in this repo: `500 / 500`
+- Main mixed workspace milestone: `500 / 500`
+- Main workspace accepted delta absorbed beyond the old `484` release freeze: `16` games across batches `072`, `073`, and `074`
 - Main runner state: heartbeat healthy, runner intentionally stopped while the final `6` games await a safe conservative queue
-- Release-side rule: do not absorb main-repo work here until a future batch is accepted as full-tier and deliberately re-frozen
+- Release-side rule: continue to freeze deliberate boardgame slices here instead of ever copying the mixed main workspace wholesale
 
 ## What is actually staged today
 
-- Nothing is staged in the Git index right now.
-- `git diff --cached --name-status` is empty.
-- The candidate release state lives as worktree-only release dirt: `14` tracked modified paths and `16` untracked paths/directories.
-- This means the safest deployment rehearsal is to stage by slice, not to assume the repo already contains a preselected index snapshot.
+- The earlier `484` runtime/data slice is committed as `cedeb84`.
+- The release-gate support slice is committed as `d578507`.
+- The refreshed `500` candidate currently exists as a worktree delta on top of those commits and should be committed as its own release-freeze step after proof review.
 
 ## Conservative surfaces
 
@@ -55,13 +54,12 @@ Status: already proven on preview and should remain separate from the boardgame 
 - `knowledge/boardgame_recommendation_kb.jsonl`
 - `public/game-covers/`
 
-Status: this is the frozen conservative `484` slice described by `knowledge/agent_batches/milestone_500_boardgame_release_pathspec.txt`.
+Status: this surface is now the refreshed `500` slice described by `knowledge/agent_batches/milestone_500_boardgame_release_pathspec.txt`, with the minimal delta concentrated in `src/data/gameDatabaseAutoExpansion.ts`, regenerated KB exports, and `16` added cover assets.
 
 ### Surface D: release gate support and reproducibility
 
 - `src/data/__tests__/gameDatabase.test.ts`
 - `src/data/__tests__/recommendationProfile.test.ts`
-- `scripts/export_boardgame_kb.mjs`
 - `scripts/audit_auto_expansion_release.mjs`
 - `scripts/generate_auto_expansion_release_eval_cases.mjs`
 - `scripts/localize_game_covers.mjs`
@@ -74,31 +72,34 @@ Status: this is the frozen conservative `484` slice described by `knowledge/agen
 - `rag_evals/data/auto_expansion_referee_faq_eval_cases.jsonl`
 - `rag_evals/data/catalog_referee_supplement_eval_cases.jsonl`
 
-Status: keep this as a separate optional slice. It is useful for a release rehearsal because it preserves the exact scripts, tests, and generated eval inputs that validated the frozen `484` candidate, but it is not the minimal production runtime payload.
+Status: this surface is still optional from a minimal production-runtime point of view, but it is now part of the proven `500` release candidate because its generated eval inputs and guardrail tests were refreshed and revalidated against the exact frozen `500` content.
 
-### Surface E: intentionally out of scope for conservative boardgame promotion
+### Surface E: now intentionally included in the full 500 proof
 
 - `rag/retrieval.py`
+- `scripts/export_boardgame_kb.mjs`
 
-Status: modified in this release repo, but still excluded from authoritative conservative release proof.
+Status: both files were exercised by the refreshed `500` proof in this repo and should be treated as part of the candidate if we want the proof to remain reproducible.
 
 ## Current verdict
 
-- The release candidate remains frozen around the conservative `484` snapshot.
-- The main repo is ahead at `494`, but that newer state is still mixed workspace state, not release-frozen state.
-- The accepted `072` batch is real progress, but it is still not safe to absorb here without a deliberate new freeze and a full rerun of the release-side proof.
-- The release-side non-Python gates already proved the `484` candidate is coherent enough to keep as the deployment base.
+- The release candidate is now refreshed around the local `500` snapshot.
+- The main repo is no longer ahead in boardgame count; this repo now matches the local merged milestone.
+- The refreshed candidate has already passed the release-side full proof in this repo: export, audit, eval generation, ingest, retrieval eval, test, and build.
+- The remaining release risk is no longer “can this candidate pass gates?” but “commit, push, preview, and promote it without mixing unrelated dirty files.”
 
 ## Minimal-risk update path when a future safe batch is ready
 
 1. Wait for a deliberate release refresh decision instead of passively inheriting main-repo progress.
 2. Freeze that exact accepted batch into a new release candidate instead of copying the mixed main worktree wholesale.
-3. Keep `rag/retrieval.py` out unless it is intentionally promoted as a separately reviewed release surface.
+3. Explicitly decide whether `rag/retrieval.py` and `scripts/export_boardgame_kb.mjs` remain part of the proof surface for that refresh.
 4. Re-run the release-side proof on the exact frozen candidate:
    - `node scripts/localize_game_covers.mjs`
    - `node scripts/export_boardgame_kb.mjs`
    - `node scripts/audit_auto_expansion_release.mjs`
    - `node scripts/generate_auto_expansion_release_eval_cases.mjs`
+   - `PYTHONPATH=. ./.venv/bin/python -m rag.ingest --input knowledge/boardgame_kb.jsonl --reset-collection`
+   - `PYTHONPATH=. ./.venv/bin/python rag_evals/run_suite.py --suite-config rag_evals/config/auto_expansion_release_suite.json --fail-on-threshold`
    - `npm test`
    - `npm run build`
 5. If the `/api/rag` runtime slice changed, re-prove preview parity on that same exact candidate before any ship decision.
@@ -106,16 +107,10 @@ Status: modified in this release repo, but still excluded from authoritative con
 ## No-go rules
 
 - Do not ship directly from `/Users/yusijua/Downloads/app 2`.
-- Do not absorb the main-repo `494 / 500` state wholesale just because the newest accepted batch already exists.
-- Do not treat Python ingest or retrieval eval from this dirty release worktree as conservative release proof while `rag/retrieval.py` remains modified and out of slice.
-- Do not rely on tracked-only staging, because `src/data/gameDatabase.ts` depends on untracked catalog source files and `public/game-covers/`.
+- Do not absorb future main-repo boardgame changes wholesale just because the local milestone is already complete.
+- Do not mix unrelated dirty files such as `docs/boardgame-source-expansion-agent.md` or `package-lock.json` into this release candidate without a separate reasoned review.
+- Do not assume the existing preview/prod state changed just because the local `500` candidate is now green.
 
 ## Immediate recommendation
 
-Keep this repo as the frozen conservative release sidecar. If the user asks for a staged deployment rehearsal, use:
-
-- `knowledge/agent_batches/milestone_500_boardgame_release_pathspec.txt` for the boardgame content slice
-- `api/rag.ts`
-- `api/__tests__/rag.test.ts`
-
-and continue to leave `rag/retrieval.py` out.
+Commit and push this refreshed `500` candidate first. Then use the exact pushed branch tip for preview verification and staged deployment review.

@@ -5,11 +5,13 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
 const PROJECT_ROOT = process.cwd();
-const ENTRY_FILE = path.join(PROJECT_ROOT, 'src/data/gameDatabase.ts');
+const WIKI_ENTRY_FILE = path.join(PROJECT_ROOT, 'src/data/wikiCompilationBundle.ts');
+const GAME_DATABASE_ENTRY_FILE = path.join(PROJECT_ROOT, 'src/data/gameDatabase.ts');
 const OUTPUT_DIR = path.join(PROJECT_ROOT, 'knowledge');
 const DOCUMENT_OUTPUT_FILE = path.join(OUTPUT_DIR, 'boardgame_kb.jsonl');
 const SECTION_OUTPUT_FILE = path.join(OUTPUT_DIR, 'boardgame_kb_sections.jsonl');
 const RECOMMENDATION_OUTPUT_FILE = path.join(OUTPUT_DIR, 'boardgame_recommendation_kb.jsonl');
+const INTERNAL_WIKI_COMPILE_VERSION = '2026-05-09.v1';
 
 function getKnowledgeTier(game) {
   return game.knowledgeTier || (compactText(game.knowledgeBase).length > 0 ? 'full' : 'catalog');
@@ -21,7 +23,7 @@ function isRefereeReadyGame(game) {
 
 function getSourceFile(game) {
   return getKnowledgeTier(game) === 'catalog'
-    ? 'src/data/gameDatabaseAutoExpansion.ts'
+    ? 'src/data/gameDatabaseCatalogExpansion.ts'
     : 'src/data/gameDatabase.ts';
 }
 
@@ -52,6 +54,137 @@ function getRecommendationProfile(game) {
     themeTags: [],
     allTags: [],
     searchTerms: [],
+  };
+}
+
+function groupApprovedPatches(approvedPatches) {
+  const grouped = new Map();
+
+  for (const patch of toArray(approvedPatches)) {
+    if (!patch || typeof patch !== 'object') {
+      continue;
+    }
+
+    const gameId = compactText(patch.gameId);
+    const mode = compactText(patch.mode);
+    if (!gameId || !mode) {
+      continue;
+    }
+
+    const key = `${mode}:${gameId}`;
+    const existing = grouped.get(key) || [];
+    existing.push(patch);
+    grouped.set(key, existing);
+  }
+
+  return grouped;
+}
+
+function getApprovedPatchSections(groupedPatches, gameId, mode) {
+  return (groupedPatches.get(`${mode}:${gameId}`) || [])
+    .filter((patch) => compactText(patch.content))
+    .map((patch, index) => ({
+      document_id: `${mode}:${gameId}:approved_patch:${patch.id || index + 1}`,
+      section_id: `approved_patch_${index + 1}`,
+      section_type: 'wiki_patch',
+      heading: compactText(patch.title) || '已批准知识修补',
+      content: compactText(patch.content),
+      chapter_id: compactText(patch.targetChapterId) || 'approved_patch',
+      chapter_title: compactText(patch.title) || '已批准知识修补',
+      chapter_rank: 90 + index,
+      chapter_keywords: toArray(patch.keywords).filter(Boolean),
+      wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
+      wiki_mode: mode,
+      wiki_visibility: 'internal',
+      patch_id: compactText(patch.id),
+      patch_type: compactText(patch.patchType) || 'append',
+      patch_approved_at: compactText(patch.approvedAt),
+      patch_feedback_ids: toArray(patch.basedOnFeedbackIds).filter(Boolean),
+      source_fields: toArray(patch.sourceFields).filter(Boolean),
+    }));
+}
+
+function getRefereeWikiMetadata(sectionId) {
+  const chapterMap = {
+    summary: {
+      chapter_id: 'game_overview',
+      chapter_title: '游戏概览',
+      chapter_rank: 0,
+      chapter_keywords: ['概览', '简介'],
+    },
+    rules_target: {
+      chapter_id: 'win_condition',
+      chapter_title: '胜利与终局',
+      chapter_rank: 1,
+      chapter_keywords: ['获胜', '胜利', '终局', '计分'],
+    },
+    rules_flow: {
+      chapter_id: 'turn_structure',
+      chapter_title: '回合流程',
+      chapter_rank: 2,
+      chapter_keywords: ['流程', '步骤', '回合'],
+    },
+    rules_tips: {
+      chapter_id: 'teach_and_tips',
+      chapter_title: '教学提醒',
+      chapter_rank: 3,
+      chapter_keywords: ['新手', '提醒', '技巧'],
+    },
+    faq: {
+      chapter_id: 'faq_resolution',
+      chapter_title: '常见争议裁定',
+      chapter_rank: 10,
+      chapter_keywords: ['faq', '争议', '裁定', '能不能'],
+    },
+    knowledge_base: {
+      chapter_id: 'rule_detail',
+      chapter_title: '关键规则细节',
+      chapter_rank: 20,
+      chapter_keywords: ['关键规则', '限制', '例外', '结算'],
+    },
+  };
+
+  return chapterMap[sectionId] || {
+    chapter_id: sectionId,
+    chapter_title: sectionId,
+    chapter_rank: 99,
+    chapter_keywords: [],
+  };
+}
+
+function getRecommendationWikiMetadata(sectionId) {
+  const chapterMap = {
+    rec_summary: {
+      chapter_id: 'fit_summary',
+      chapter_title: '总体适配摘要',
+      chapter_rank: 1,
+      chapter_keywords: ['总体适配', '一句话'],
+    },
+    rec_fit: {
+      chapter_id: 'player_and_time_fit',
+      chapter_title: '人数与时长适配',
+      chapter_rank: 2,
+      chapter_keywords: ['人数', '时长', '节奏'],
+    },
+    rec_tags: {
+      chapter_id: 'mood_and_mechanic_fit',
+      chapter_title: '氛围与机制适配',
+      chapter_rank: 4,
+      chapter_keywords: ['氛围', '互动', '机制', '场景'],
+    },
+    rec_search: {
+      chapter_id: 'search_aliases',
+      chapter_title: '检索别名',
+      chapter_rank: 8,
+      chapter_keywords: ['搜索词', '别名', '标签'],
+    },
+  };
+
+  return chapterMap[sectionId] || {
+    chapter_id: sectionId,
+    chapter_title: sectionId,
+    chapter_rank: 99,
+    chapter_keywords: [],
   };
 }
 
@@ -225,7 +358,7 @@ ${buildRecommendationQueryTemplates(game, profile).join('\n')}
   ].filter((section) => section.content.length > 0);
 }
 
-function createSectionDocuments(game) {
+function createSectionDocuments(game, groupedApprovedPatches) {
   const baseMetadata = {
     game_id: game.id,
     title_cn: game.titleCn,
@@ -288,13 +421,17 @@ function createSectionDocuments(game) {
     .map((question) => compactText(question))
     .filter(Boolean);
 
-  return rawSections.map((section) => ({
+  const compiledSections = rawSections.map((section) => ({
+    ...getRefereeWikiMetadata(section.section_id),
     document_id: `${game.id}:${section.section_id}`,
     ...baseMetadata,
     source_file: getSourceFile(game),
     heading: section.heading,
     section_id: section.section_id,
     section_type: section.section_type,
+    wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
+    wiki_mode: 'referee',
+    wiki_visibility: 'internal',
     content: section.content,
     char_count: section.content.length,
     common_questions: commonQuestions,
@@ -308,9 +445,28 @@ function createSectionDocuments(game) {
       .filter(Boolean)
       .join('\n\n'),
   }));
+
+  const approvedPatchSections = getApprovedPatchSections(groupedApprovedPatches, game.id, 'referee').map((section) => ({
+    ...baseMetadata,
+    source_file: 'src/data/wikiApprovedPatches.ts',
+    char_count: section.content.length,
+    common_questions: commonQuestions,
+    search_text: [
+      game.titleCn,
+      game.titleEn,
+      section.heading,
+      joinValues(section.chapter_keywords),
+      section.content,
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    ...section,
+  }));
+
+  return [...compiledSections, ...approvedPatchSections];
 }
 
-function createRecommendationSectionDocuments(game) {
+function createRecommendationSectionDocuments(game, groupedApprovedPatches) {
   const profile = getRecommendationProfile(game);
   const baseMetadata = {
     game_id: game.id,
@@ -332,13 +488,17 @@ function createRecommendationSectionDocuments(game) {
     knowledge_tier: getKnowledgeTier(game),
   };
 
-  return createRecommendationSections(game).map((section) => ({
+  const compiledSections = createRecommendationSections(game).map((section) => ({
+    ...getRecommendationWikiMetadata(section.section_id),
     document_id: `recommendation:${game.id}:${section.section_id}`,
     ...baseMetadata,
     source_file: getSourceFile(game),
     heading: section.heading,
     section_id: section.section_id,
     section_type: section.section_type,
+    wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
+    wiki_mode: 'recommendation',
+    wiki_visibility: 'internal',
     content: section.content,
     char_count: section.content.length,
     search_text: [
@@ -352,16 +512,36 @@ function createRecommendationSectionDocuments(game) {
       .filter(Boolean)
       .join('\n\n'),
   }));
+
+  const approvedPatchSections = getApprovedPatchSections(groupedApprovedPatches, game.id, 'recommendation').map((section) => ({
+    ...baseMetadata,
+    source_file: 'src/data/wikiApprovedPatches.ts',
+    char_count: section.content.length,
+    search_text: [
+      game.titleCn,
+      game.titleEn,
+      section.heading,
+      joinValues(section.chapter_keywords),
+      section.content,
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    ...section,
+  }));
+
+  return [...compiledSections, ...approvedPatchSections];
 }
 
-function createKnowledgeDocument(game) {
-  const sections = createSectionDocuments(game).map((section) => ({
+function createKnowledgeDocument(game, groupedApprovedPatches) {
+  const sections = createSectionDocuments(game, groupedApprovedPatches).map((section) => ({
     section_id: section.section_id,
     title: section.heading,
     text: section.content,
     metadata: {
       section_type: section.section_type,
       char_count: section.char_count,
+      chapter_id: section.chapter_id,
+      patch_id: section.patch_id || '',
     },
   }));
 
@@ -388,20 +568,24 @@ function createKnowledgeDocument(game) {
       bgg_url: game.bggUrl || '',
       knowledge_tier: getKnowledgeTier(game),
       common_questions_text: joinValues(game.commonQuestions),
+      wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
+      wiki_visibility: 'internal',
     },
     sections,
   };
 }
 
-function createRecommendationDocument(game) {
+function createRecommendationDocument(game, groupedApprovedPatches) {
   const profile = getRecommendationProfile(game);
-  const sections = createRecommendationSections(game).map((section) => ({
+  const sections = createRecommendationSectionDocuments(game, groupedApprovedPatches).map((section) => ({
     section_id: section.section_id,
     title: section.heading,
     text: section.content,
     metadata: {
       section_type: section.section_type,
       char_count: section.content.length,
+      chapter_id: section.chapter_id,
+      patch_id: section.patch_id || '',
     },
   }));
 
@@ -437,6 +621,8 @@ function createRecommendationDocument(game) {
       bgg_id: game.bggId || '',
       bgg_url: game.bggUrl || '',
       knowledge_tier: getKnowledgeTier(game),
+      wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
+      wiki_visibility: 'internal',
     },
     sections,
   };
@@ -445,9 +631,12 @@ function createRecommendationDocument(game) {
 async function loadGameDatabase() {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'boardgame-kb-'));
   const bundleFile = path.join(tempDir, 'gameDatabase.bundle.mjs');
+  const entryFile = (await fs.stat(WIKI_ENTRY_FILE).then(() => true).catch(() => false))
+    ? WIKI_ENTRY_FILE
+    : GAME_DATABASE_ENTRY_FILE;
 
   await build({
-    entryPoints: [ENTRY_FILE],
+    entryPoints: [entryFile],
     bundle: true,
     format: 'esm',
     platform: 'node',
@@ -461,26 +650,30 @@ async function loadGameDatabase() {
   try {
     const moduleUrl = pathToFileURL(bundleFile).href;
     const gameModule = await import(moduleUrl);
-    return toArray(gameModule.GAME_DATABASE);
+    return {
+      games: toArray(gameModule.GAME_DATABASE),
+      approvedPatches: toArray(gameModule.WIKI_APPROVED_PATCHES),
+    };
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 }
 
 async function main() {
-  const games = await loadGameDatabase();
+  const { games, approvedPatches } = await loadGameDatabase();
+  const groupedApprovedPatches = groupApprovedPatches(approvedPatches);
 
   if (!games.length) {
     throw new Error('No games found in GAME_DATABASE');
   }
 
   const refereeReadyGames = games.filter(isRefereeReadyGame);
-  const knowledgeDocuments = refereeReadyGames.map(createKnowledgeDocument);
-  const recommendationDocuments = games.map(createRecommendationDocument);
+  const knowledgeDocuments = refereeReadyGames.map((game) => createKnowledgeDocument(game, groupedApprovedPatches));
+  const recommendationDocuments = games.map((game) => createRecommendationDocument(game, groupedApprovedPatches));
   const combinedDocuments = [...knowledgeDocuments, ...recommendationDocuments];
   const sectionDocuments = games.flatMap((game) => [
-    ...(isRefereeReadyGame(game) ? createSectionDocuments(game) : []),
-    ...createRecommendationSectionDocuments(game),
+    ...(isRefereeReadyGame(game) ? createSectionDocuments(game, groupedApprovedPatches) : []),
+    ...createRecommendationSectionDocuments(game, groupedApprovedPatches),
   ]);
   const knowledgePayload = combinedDocuments.map((doc) => JSON.stringify(doc)).join('\n') + '\n';
   const recommendationPayload = recommendationDocuments.map((doc) => JSON.stringify(doc)).join('\n') + '\n';
@@ -499,6 +692,7 @@ async function main() {
         referee_documents: knowledgeDocuments.length,
         recommendation_documents: recommendationDocuments.length,
         section_documents: sectionDocuments.length,
+        approved_patches: approvedPatches.length,
         outputs: [
           path.relative(PROJECT_ROOT, DOCUMENT_OUTPUT_FILE),
           path.relative(PROJECT_ROOT, RECOMMENDATION_OUTPUT_FILE),
