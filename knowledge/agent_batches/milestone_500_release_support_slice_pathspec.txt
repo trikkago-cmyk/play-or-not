@@ -1,0 +1,16 @@
+knowledge/agent_batches/milestone_500_release_support_slice_plan.md
+knowledge/agent_batches/milestone_500_release_support_slice_pathspec.txt
+rag_evals/config/auto_expansion_release_suite.json
+rag_evals/data/auto_expansion_recommendation_eval_cases.jsonl
+rag_evals/data/auto_expansion_referee_eval_cases.jsonl
+rag_evals/data/auto_expansion_referee_faq_eval_cases.jsonl
+rag_evals/data/auto_expansion_referee_flow_eval_cases.jsonl
+rag_evals/data/auto_expansion_referee_primary_eval_cases.jsonl
+rag_evals/data/catalog_referee_supplement_eval_cases.jsonl
+scripts/audit_auto_expansion_release.mjs
+scripts/generate_auto_expansion_release_eval_cases.mjs
+scripts/lib/game_data_loader.mjs
+scripts/localize_game_covers.mjs
+src/data/__tests__/gameDatabase.test.ts
+src/data/__tests__/recommendationProfile.test.ts
+tsconfig.app.json
