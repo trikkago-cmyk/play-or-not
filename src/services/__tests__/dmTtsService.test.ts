@@ -69,6 +69,13 @@ describe('dmTtsService', () => {
       value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
     });
 
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        hostname: 'localhost',
+      },
+    });
+
     Object.defineProperty(window, 'Audio', {
       configurable: true,
       value: undefined,
@@ -134,6 +141,38 @@ describe('dmTtsService', () => {
     expect(utterance.text).toBe('欢迎来到桌游局。');
     expect(utterance.voice?.name).toContain('Xiaoxiao');
     expect(utterance.lang).toBe('zh-CN');
+  });
+
+  it('does not silently fall back to browser speech on hosted production domains', async () => {
+    getVoicesMock.mockReturnValue([createVoice('Microsoft Xiaoxiao Online (Natural)', 'zh-CN')]);
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        hostname: 'play-or-not-dm.vercel.app',
+      },
+    });
+
+    class MockAudio {
+      play() {
+        return Promise.resolve();
+      }
+
+      pause() {
+        return undefined;
+      }
+    }
+
+    Object.defineProperty(window, 'Audio', {
+      configurable: true,
+      value: MockAudio,
+    });
+
+    const didSpeak = await speakAsDm('欢迎来到桌游局。');
+
+    expect(didSpeak).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(speakMock).toHaveBeenCalledTimes(0);
   });
 
   it('plays server-generated audio when /api/tts returns an audio stream', async () => {

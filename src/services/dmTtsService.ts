@@ -5,6 +5,7 @@ const BROWSER_SPEECH_START_TIMEOUT_MS = 1200;
 const BROWSER_SPEECH_STATUS_POLL_MS = 80;
 const REMOTE_TTS_COOLDOWN_MS = 5 * 60 * 1000;
 const SILENT_AUDIO_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
+const BROWSER_SPEECH_FALLBACK_STORAGE_KEY = 'dm_luosi_tts_allow_browser_fallback_v1';
 
 const FEMALE_PREFERRED_PATTERNS = [
   /xiaoxiao/i,
@@ -56,8 +57,29 @@ function canUseBrowserSpeechSynthesis(): boolean {
     && typeof window.SpeechSynthesisUtterance !== 'undefined';
 }
 
+function shouldAllowBrowserSpeechFallback(): boolean {
+  if (!canUseBrowserSpeechSynthesis()) {
+    return false;
+  }
+
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    if (window.localStorage.getItem(BROWSER_SPEECH_FALLBACK_STORAGE_KEY) === 'true') {
+      return true;
+    }
+  } catch {
+    // Ignore storage failures and keep the runtime path working.
+  }
+
+  const host = window.location.hostname.trim().toLowerCase();
+  return host === '' || host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
+}
+
 export function isDmTtsSupported(): boolean {
-  return canUseRemoteAudioPlayback() || canUseBrowserSpeechSynthesis();
+  return canUseRemoteAudioPlayback() || shouldAllowBrowserSpeechFallback();
 }
 
 function isLikelyGestureRestrictedBrowser(): boolean {
@@ -111,7 +133,10 @@ export function buildSpeakableMessage(rawText: string): string {
     return '';
   }
 
-  const withoutReferenceBlock = rawText.replace(/\n\s*\*\*参考依据\*\*[\s\S]*$/m, '');
+  const withoutReferenceBlock = rawText.replace(
+    /\n\s*(?:\*\*)?(?:参考依据|参考资料|资料来源|证据列表)(?:\*\*)?[\s\S]*$/m,
+    '',
+  );
 
   return withoutReferenceBlock
     .replace(/```[\s\S]*?```/g, ' ')
@@ -306,6 +331,10 @@ export async function speakAsDm(
     if (didPlayRemoteAudio) {
       return true;
     }
+  }
+
+  if (!shouldAllowBrowserSpeechFallback()) {
+    return false;
   }
 
   if (!canUseBrowserSpeechSynthesis()) {

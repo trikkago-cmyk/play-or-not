@@ -7,6 +7,7 @@ import { mockGames } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { shouldShowEnglishSubtitle } from '@/services/gameTextResolver';
 
 interface GameDetailPageProps {
   gameId: string;
@@ -26,6 +27,7 @@ export default function GameDetailPage({
 
   const game = mockGames.find(g => g.id === gameId) || mockGames[0];
   const hasFullRulebook = game.knowledgeTier !== 'catalog';
+  const showEnglishSubtitle = shouldShowEnglishSubtitle(game);
 
   const handleShare = () => {
     const shareUrl = `${window.location.origin}${window.location.pathname}?gameId=${game.id}`;
@@ -93,13 +95,15 @@ export default function GameDetailPage({
         <GameCoverImage
           src={game.coverUrl}
           title={game.titleCn}
-          subtitle={game.titleEn}
+          subtitle={showEnglishSubtitle ? game.titleEn : undefined}
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
         <div className="absolute bottom-4 left-4 text-white">
           <h2 className="text-2xl font-black drop-shadow-lg">{game.titleCn}</h2>
-          <p className="text-sm opacity-90">{game.titleEn}</p>
+          {showEnglishSubtitle ? (
+            <p className="text-sm opacity-90">{game.titleEn}</p>
+          ) : null}
         </div>
       </div>
 

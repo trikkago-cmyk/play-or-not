@@ -1,6 +1,7 @@
 // LLM 服务 - 支持多种API提供商
 import { GAME_DATABASE } from '@/data/gameDatabase';
 import { buildRagEvidencePack, queryKnowledgeBase, type RagCitation, type RagHit } from './pythonRagService';
+import { hasLocalizedGameTitle, resolveMentionedGameInText } from './gameTextResolver';
 import type { Game, ChatMode } from '@/types';
 
 // API 配置
@@ -100,6 +101,70 @@ interface RecommendationIntent {
   maxPlaytime?: number;
   desiredTags: string[];
   searchTerms: string[];
+}
+
+function sanitizeRecommendationReplyText(text: string): string {
+  return text
+    .replace(/按你刚才这句，我先回到当前召回里最稳的一款[:：]?/g, '按你这局的需求，我先给你落一款更贴的：')
+    .replace(/我直接给你推荐召回中最稳的这一句[:：]?/g, '这局我先给你落这款：')
+    .replace(/当前召回里最稳的一款[:：]?/g, '这局更贴的一款：')
+    .replace(/推荐候选池|候选池|召回|recommendation_id|memoryContext|Core Memory|长期记忆|内部使用/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function sanitizeRefereeReplyText(text: string): string {
+  return text
+    .replace(/\[证据\d+\]/g, '')
+    .replace(/\n{0,2}(?:#+\s*)?(?:参考依据|参考资料|资料来源|证据列表)[:：]?(?:\n|$)[\s\S]*$/g, '')
+    .replace(/根据(?:规则|资料|知识库|FAQ)[^，。！？]*[，,:：]\s*/g, '')
+    .replace(/(?:这条|上面这条)?(?:常见问题|知识库|规则原文)[^，。！？]*[，,:：]\s*/g, '')
+    .replace(/记忆上下文|内部使用|Core Memory/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function shouldAvoidAutoSurfacingUnlocalizedGame(game: Game, userQuestion: string): boolean {
+  if (hasLocalizedGameTitle(game)) {
+    return false;
+  }
+
+  return resolveMentionedGameInText(userQuestion)?.id !== game.id;
+}
+
+function normalizeRuleSentence(text: string): string {
+  return text
+    .replace(/^#+\s*/gm, '')
+    .replace(/^\s*[-*]\s*/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tryBuildDirectRefereeAnswer(userQuestion: string, activeGame?: Game): string | null {
+  if (!activeGame) {
+    return null;
+  }
+
+  const normalizedQuestion = userQuestion.replace(/\s+/g, '');
+  const rulesTarget = normalizeRuleSentence(activeGame.rules.target || '');
+  const rulesFlow = normalizeRuleSentence(activeGame.rules.flow || '');
+  const rulesTips = normalizeRuleSentence(activeGame.rules.tips || '');
+
+  if (/(怎么才算赢|如何获胜|怎么赢|胜利条件|获胜条件)/.test(normalizedQuestion) && rulesTarget) {
+    return `**赢法很直接：** ${rulesTarget}`;
+  }
+
+  if (/(流程|回合|步骤|先干嘛|怎么玩)/.test(normalizedQuestion) && rulesFlow) {
+    return `**大致流程可以这样抓：**\n${rulesFlow}`;
+  }
+
+  if (/(注意什么|避坑|新手|提醒)/.test(normalizedQuestion) && rulesTips) {
+    return `**先记这几个容易踩坑的点：**\n${rulesTips}`;
+  }
+
+  return null;
 }
 
 const SMALLTALK_ONLY_PATTERN = /^(你好|您好|嗨|哈喽|hello|hi|thanks|thankyou|谢谢|谢啦|多谢|好的|好滴|ok|okay|收到|明白|拜拜|再见|哈哈|hhh|嗯嗯|嗯|哦哦)[!！,.。?？~～]*$/i;
@@ -571,7 +636,7 @@ function buildCandidateFallbackReply(
   ].filter(Boolean);
 
   const lead = correctionReason === 'out_of_pool'
-    ? `按你刚才这句，我先回到当前召回里最稳的一款：**《${game.titleCn}》**。`
+    ? `按你这局的需求，我先给你落一款更贴的：**《${game.titleCn}》**。`
     : `我先推荐 **《${game.titleCn}》**。`;
 
   return [
@@ -788,6 +853,7 @@ function getSystemInstruction({
     6. 当你已经决定推荐本地库游戏时，**禁止**提及除该推荐游戏以外的其他游戏名称，避免混淆。绝对不要进行对比（例如“像xxx一样”）。
     7. 如果用户说“换一个”，请避开【本轮不要重复推荐】里的游戏。
     8. 如果用户目前只给了很粗的信息（例如只有人数，没有场景、时长、氛围），不要机械地总推同一款万能热场游戏；优先在候选池里挑更贴合的候选，或者简短追问一句。
+    9. 你的话术要自然、轻松、带一点懂行朋友的幽默感，但不要油腻，不要冒出“召回”“候选池”“记忆上下文”这类内部词。
 
       【回复格式要求】：
       - 请务必使用 ** Markdown ** 格式。
@@ -840,12 +906,9 @@ function getSystemInstruction({
 
     const citationGuide = retrievedRuleCitations.length > 0
       ? `
-      【证据标签】：
-      你收到的规则资料已经带了证据标签，例如 [证据1]、[证据2]。
-      回答时请遵守：
-      1. 关键判定、关键例外、胜负结论后，尽量补上对应证据标签，例如“**不能这么做** [证据2]”。
-      2. 不要编造不存在的证据标签，只能使用资料里真的出现过的标签。
-      3. 如果当前资料没有直接写明，明确说“当前规则资料里没有直接写明”，不要装作规则原文有写。
+      【内部规则资料】：
+      这些资料只用于你自己判断，不要把 [证据1]、章节名、FAQ 标题、参考依据之类的内部结构露给用户。
+      如果当前资料没有直接写明，就明确说“这条我不敢瞎判”，不要装作规则原文已经写了。
       `
       : '';
 
@@ -870,7 +933,7 @@ function getSystemInstruction({
       【任务】：
     1. 当本地规则库完整时，你按 **强规则权威** 回答；当本地规则库不完整时，你按 **谨慎助理** 回答。
     2. 当用户询问规则、争议、流程时，优先检索【核心技能库】。
-    3. ** 请直接回答问题 **，不要复述参考资料的原文。不要说“根据规则...”。
+    3. ** 请直接回答问题 **，先给结论，再把关键规则自然解释出来。不要说“根据规则...”“参考依据...”。
     4. 遇到资料未提及的细节，不要假装规则里明确写了；可以给出谨慎推断，但要说清楚是推断。
     5. 解释规则要通俗易懂，像朋友交流一样自然。
       
@@ -894,48 +957,14 @@ function getSystemInstruction({
 
 function buildCitationReferenceBlock(
   text: string,
-  citations: RagCitation[],
+  _citations: RagCitation[],
 ): string {
-  if (citations.length === 0) {
-    return text;
-  }
-
-  const supportedLabels = new Set(citations.map((citation) => `[${citation.label}]`));
-  const normalizedText = text
-    .replace(/\[证据\d+\]/g, (label) => (supportedLabels.has(label) ? label : ''))
+  return sanitizeRefereeReplyText(text)
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\s+([，。！？、,.:;])/g, '$1')
     .replace(/\s+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-
-  const usedLabels = Array.from(new Set((normalizedText.match(/\[证据\d+\]/g) || []).map((label) => label.replace(/[\[\]]/g, ''))));
-  const resolvedCitations = (usedLabels.length > 0
-    ? citations.filter((citation) => usedLabels.includes(citation.label))
-    : citations.slice(0, Math.min(2, citations.length)));
-
-  if (resolvedCitations.length === 0) {
-    return normalizedText;
-  }
-
-  const referenceLines = resolvedCitations.map((citation) => {
-    const heading = citation.sectionTitle
-      ? `${citation.title} / ${citation.sectionTitle}`
-      : citation.title;
-    return `- [${citation.label}] ${heading}：${citation.snippet}`;
-  });
-
-  const alreadyHasReferenceBlock = /参考依据|证据来源/.test(normalizedText);
-  if (alreadyHasReferenceBlock) {
-    return normalizedText;
-  }
-
-  return [
-    normalizedText,
-    '',
-    '**参考依据**',
-    ...referenceLines,
-  ].join('\n');
 }
 
 // 调用真实LLM API
@@ -1202,6 +1231,16 @@ export async function getLLMResponse(
     .filter((title): title is string => Boolean(title))
     .slice(-8);
 
+  const directRefereeAnswer = mode === 'referee'
+    ? tryBuildDirectRefereeAnswer(currentUserQuestion, activeGame)
+    : null;
+
+  if (directRefereeAnswer) {
+    return {
+      text: directRefereeAnswer,
+    };
+  }
+
   if (mode === 'referee' && activeGame && shouldUseKnowledgeRetrieval) {
     try {
       const hits = await queryKnowledgeBase(currentUserQuestion, {
@@ -1288,7 +1327,9 @@ export async function getLLMResponse(
 
       // 修复 Markdown 换行问题：处理可能存在的双重转义换行符
       // 进一步将 literal "\\n" 替换为真实换行，且将 "\\*" 还原为 "*" 以防 Markdown 渲染失败
-      const text = String(parsedResult.reply || "").replace(/\\n/g, '\n').replace(/\\\*/g, '*');
+      const text = sanitizeRecommendationReplyText(
+        String(parsedResult.reply || '').replace(/\\n/g, '\n').replace(/\\\*/g, '*'),
+      );
 
       // 先从回复正文提取被真正点名的游戏，避免 JSON ID 被模型写错时误导前端
       const matches = Array.from(text.matchAll(/[《【](.*?)[》】]/g)).map((m: any) => m[1].replace(/[*_]/g, '').trim());
@@ -1319,6 +1360,8 @@ export async function getLLMResponse(
         finalId = undefined;
       }
 
+      const finalGame = finalId ? GAME_DATABASE.find((game) => game.id === finalId) : undefined;
+
       if (
         finalId &&
         allowedCandidateIds.size > 0 &&
@@ -1335,6 +1378,16 @@ export async function getLLMResponse(
         }
       }
 
+      if (finalGame && shouldAvoidAutoSurfacingUnlocalizedGame(finalGame, currentUserQuestion)) {
+        const localizedFallback = recommendationCandidates.find((candidate) => hasLocalizedGameTitle(candidate.game));
+        if (localizedFallback) {
+          return {
+            text: buildCandidateFallbackReply(localizedFallback, 'out_of_pool'),
+            gameId: localizedFallback.game.id,
+          };
+        }
+      }
+
       return {
         text: text || "我好像走神了...",
         gameId: finalId,
@@ -1342,7 +1395,9 @@ export async function getLLMResponse(
       };
     }
 
-    const replyText = String(parsedResult.reply || '').replace(/\\n/g, '\n').replace(/\\\*/g, '*');
+    const replyText = sanitizeRefereeReplyText(
+      String(parsedResult.reply || '').replace(/\\n/g, '\n').replace(/\\\*/g, '*'),
+    );
     const finalText = buildCitationReferenceBlock(replyText, retrievedRuleCitations);
     return {
       text: finalText || "规则判定中...",
@@ -1356,11 +1411,12 @@ export async function getLLMResponse(
   if (mode === 'recommendation') {
     if (fallbackReplyText) {
       return {
-        text: fallbackReplyText,
+        text: sanitizeRecommendationReplyText(fallbackReplyText),
       };
     }
     if (recommendationCandidates.length > 0) {
-      const fallbackCandidate = recommendationCandidates[0];
+      const fallbackCandidate = recommendationCandidates.find((candidate) => hasLocalizedGameTitle(candidate.game))
+        ?? recommendationCandidates[0];
       return {
         text: buildCandidateFallbackReply(fallbackCandidate),
         gameId: fallbackCandidate.game.id,

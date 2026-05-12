@@ -1,5 +1,6 @@
 import {
   documentationResponse,
+  endpointDescription,
   jsonResponse,
   methodNotAllowed,
   optionsResponse,
@@ -29,6 +30,17 @@ const DEFAULT_TTS_SERVICE_URL = 'http://127.0.0.1:8010';
 const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimaxi.com';
 const DEFAULT_MINIMAX_MODEL = 'speech-2.5-hd-preview';
 const DEFAULT_MINIMAX_VOICE_ID = 'Chinese (Mandarin)_Warm_Bestie';
+const DEFAULT_DOUBAO_TTS_API_BASE_URL = 'https://openspeech.bytedance.com';
+const DEFAULT_DOUBAO_TTS_ENDPOINT_PATH = '/api/v3/tts/unidirectional/sse';
+const DEFAULT_DOUBAO_TTS_RESOURCE_ID = 'seed-tts-1.0';
+const DEFAULT_DOUBAO_TTS_VOICE_TYPE = 'zh_female_tianmeixiaoyuan_uranus_bigtts';
+const DEFAULT_DOUBAO_TTS_ENCODING = 'mp3';
+const DEFAULT_DOUBAO_TTS_SAMPLE_RATE = 24000;
+const DEFAULT_DOUBAO_TTS_TIMEOUT_MS = 20000;
+const DOUBAO_TTS_AUDIO_EVENT = '352';
+const DOUBAO_TTS_FINISH_EVENT = '152';
+const DOUBAO_TTS_ERROR_EVENT = '153';
+const DOUBAO_TTS_SUCCESS_CODE = 20000000;
 const DEFAULT_AUDIO_FORMAT = 'mp3';
 const DEFAULT_SAMPLE_RATE = 32000;
 const DEFAULT_BITRATE = 128000;
@@ -47,27 +59,30 @@ type ParsedTtsBody = {
 const TTS_DOC: EndpointDoc = {
   endpoint: '/api/tts',
   title: 'DM 语音播报接口',
-  description: '将文本转换为可直接播放的音频流。当前优先支持自托管 CosyVoice 服务，也兼容 MiniMax TTS。',
+  description: '将文本转换为可直接播放的音频流。当前支持豆包语音、自托管 CosyVoice 服务，也兼容 MiniMax TTS。',
   allowedMethods: ['GET', 'POST', 'OPTIONS'],
   requestContentType: 'application/json',
   requiredFields: ['text'],
   optionalFields: {
-    voiceId: '可选，覆盖默认 voice_id。MiniMax 使用系统或克隆 voice_id；自托管服务可按自身协议解释。',
+    voiceId: '可选，覆盖默认 voice_id。豆包语音使用 voice_type；MiniMax 使用系统或克隆 voice_id；自托管服务可按自身协议解释。',
     speed: '可选，0.5 - 2 之间的语速覆盖值。',
     emotion: '可选，透传给上游服务的情感标签。',
     instruction: '可选，给 CosyVoice 类模型的语气/风格指令。',
   },
   capabilities: [
     '返回可直接播放的 audio/* 响应',
-    '支持自托管 CosyVoice 服务与 MiniMax 双后端',
+    '支持豆包语音、自托管 CosyVoice 服务与 MiniMax 多后端',
     '前端只调用同一个 /api/tts，后端 provider 可通过环境变量切换',
   ],
   limitations: [
     'CosyVoice provider 需要额外部署 Python 推理服务，Vercel 自身不运行大模型。',
+    '豆包语音 provider 需要 API Key，或旧版 App ID + Access Token。',
     '如果没有配置任何上游 provider，前端会回退到浏览器原生语音。',
   ],
   notes: [
-    '推荐优先配置 TTS_PROVIDER=cosyvoice_service 和 TTS_SERVICE_URL，走自托管免费链路。',
+    '当前线上目标 provider 是 doubao_tts；以 GET /api/tts 返回的 current_provider 为准。',
+    '如果配置 Doubao，优先使用 DOUBAO_TTS_API_KEY；旧版也兼容 DOUBAO_TTS_APP_ID + DOUBAO_TTS_ACCESS_TOKEN。',
+    '如果需要自托管实验，再配置 TTS_PROVIDER=cosyvoice_service 和 TTS_SERVICE_URL。',
     '如果你后续录了自己的声音，可以把 prompt 音频放到 CosyVoice 服务侧，不需要再改前端。',
   ],
   authentication: '当前不对外暴露独立鉴权；由站点前端在同域下调用。',
@@ -97,7 +112,58 @@ function resolveProvider() {
     return 'cosyvoice_service';
   }
 
+  if (hasDoubaoTtsConfiguredEnv()) {
+    return 'doubao_tts';
+  }
+
   return process.env.MINIMAX_TTS_API_KEY?.trim() ? 'minimax' : 'disabled';
+}
+
+function readDoubaoTtsApiKey() {
+  return process.env.DOUBAO_TTS_API_KEY?.trim()
+    || process.env.DOUBAO_VOICE_API_KEY?.trim()
+    || '';
+}
+
+function readDoubaoTtsAppId() {
+  return process.env.DOUBAO_TTS_APP_ID?.trim()
+    || process.env.DOUBAO_VOICE_APP_ID?.trim()
+    || '';
+}
+
+function readDoubaoTtsAccessToken() {
+  return process.env.DOUBAO_TTS_ACCESS_TOKEN?.trim()
+    || process.env.DOUBAO_VOICE_ACCESS_TOKEN?.trim()
+    || '';
+}
+
+function readDoubaoTtsResourceId() {
+  return process.env.DOUBAO_TTS_RESOURCE_ID?.trim()
+    || process.env.DOUBAO_VOICE_RESOURCE_ID?.trim()
+    || DEFAULT_DOUBAO_TTS_RESOURCE_ID;
+}
+
+function hasDoubaoTtsConfiguredEnv() {
+  return Boolean(
+    readDoubaoTtsApiKey()
+    || (readDoubaoTtsAppId() && readDoubaoTtsAccessToken()),
+  );
+}
+
+function resolveDoubaoAudioContentType(encoding: string) {
+  switch (encoding) {
+    case 'wav':
+      return 'audio/wav';
+    case 'ogg_opus':
+      return 'audio/ogg';
+    case 'aac':
+      return 'audio/aac';
+    case 'pcm':
+      return 'audio/pcm';
+    case 'mp3':
+    default:
+      return 'audio/mpeg';
+  }
 }
 
 function parseBoundedNumber(rawValue: unknown, fallback: number, min: number, max: number) {
@@ -132,6 +198,110 @@ function uint8ArrayToArrayBuffer(value: Uint8Array) {
   const copied = new Uint8Array(value.byteLength);
   copied.set(value);
   return copied.buffer;
+}
+
+async function collectDoubaoAudioFromSse(response: Response) {
+  if (!response.body) {
+    throw new Error('Doubao TTS response body is empty.');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const audioChunks: Uint8Array[] = [];
+  let failurePayload: { code?: number; message?: string } | null = null;
+  let sawAudio = false;
+
+  const processEventBlock = (rawBlock: string) => {
+    const block = rawBlock.trim();
+    if (!block) {
+      return;
+    }
+
+    let eventName = '';
+    const dataLines: string[] = [];
+
+    block.split(/\r?\n/).forEach((line) => {
+      if (line.startsWith('event:')) {
+        eventName = line.slice('event:'.length).trim();
+        return;
+      }
+      if (line.startsWith('data:')) {
+        dataLines.push(line.slice('data:'.length).trim());
+      }
+    });
+
+    if (!dataLines.length) {
+      return;
+    }
+
+    const payloadText = dataLines.join('\n');
+    const payload = JSON.parse(payloadText) as {
+      code?: number;
+      message?: string;
+      data?: string;
+    };
+
+    if (eventName === DOUBAO_TTS_AUDIO_EVENT) {
+      if (payload.code === 0 && typeof payload.data === 'string' && payload.data.length > 0) {
+        audioChunks.push(Buffer.from(payload.data, 'base64'));
+        sawAudio = true;
+        return;
+      }
+
+      failurePayload = payload;
+      return;
+    }
+
+    if (eventName === DOUBAO_TTS_FINISH_EVENT) {
+      if (payload.code !== DOUBAO_TTS_SUCCESS_CODE) {
+        failurePayload = payload;
+      }
+      return;
+    }
+
+    if (
+      eventName === DOUBAO_TTS_ERROR_EVENT
+      || (typeof payload.code === 'number' && payload.code !== 0 && payload.code !== DOUBAO_TTS_SUCCESS_CODE)
+    ) {
+      failurePayload = payload;
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split(/\r?\n\r?\n/);
+    buffer = parts.pop() ?? '';
+    parts.forEach((part) => processEventBlock(part));
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    processEventBlock(buffer);
+  }
+
+  if (failurePayload) {
+    throw new Error(failurePayload.message || `Doubao TTS failed with code ${failurePayload.code ?? 'unknown'}.`);
+  }
+
+  if (!sawAudio || audioChunks.length === 0) {
+    throw new Error('Doubao TTS did not return any audio chunks.');
+  }
+
+  const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const merged = new Uint8Array(totalLength);
+  let offset = 0;
+  audioChunks.forEach((chunk) => {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  });
+
+  return merged;
 }
 
 async function parseTtsBody(req: Request) {
@@ -366,13 +536,182 @@ async function proxyMiniMax(body: ParsedTtsBody) {
   });
 }
 
+async function proxyDoubaoTts(body: ParsedTtsBody) {
+  const apiKey = readDoubaoTtsApiKey();
+  const appId = readDoubaoTtsAppId();
+  const accessToken = readDoubaoTtsAccessToken();
+
+  if (!apiKey && (!appId || !accessToken)) {
+    return jsonResponse({
+      code: 'tts_unconfigured',
+      error: 'Doubao TTS credentials are missing.',
+      provider: 'doubao_tts',
+      hint: 'Prefer DOUBAO_TTS_API_KEY. If you are on the old console, set DOUBAO_TTS_APP_ID and DOUBAO_TTS_ACCESS_TOKEN instead.',
+    }, {
+      status: 503,
+    });
+  }
+
+  const voiceType = body.voiceId || (process.env.DOUBAO_TTS_VOICE_TYPE || DEFAULT_DOUBAO_TTS_VOICE_TYPE).trim();
+  const audioEncoding = ((process.env.DOUBAO_TTS_ENCODING || DEFAULT_DOUBAO_TTS_ENCODING).trim().toLowerCase()
+    || DEFAULT_DOUBAO_TTS_ENCODING);
+  const sampleRate = parseBoundedNumber(
+    process.env.DOUBAO_TTS_SAMPLE_RATE,
+    DEFAULT_DOUBAO_TTS_SAMPLE_RATE,
+    8000,
+    48000,
+  );
+  const speedRatio = parseBoundedNumber(body.speed ?? process.env.DOUBAO_TTS_SPEED, DEFAULT_SPEED, 0.5, 2);
+  const volumeRatio = parseBoundedNumber(process.env.DOUBAO_TTS_VOLUME, DEFAULT_VOLUME, 0.1, 3);
+  const pitchRatio = parseBoundedNumber(process.env.DOUBAO_TTS_PITCH, 1, 0.5, 2);
+  const timeoutMs = parseBoundedNumber(
+    process.env.DOUBAO_TTS_TIMEOUT_MS,
+    DEFAULT_DOUBAO_TTS_TIMEOUT_MS,
+    3000,
+    45000,
+  );
+  const resourceId = readDoubaoTtsResourceId();
+  const userId = (process.env.DOUBAO_TTS_USER_ID || 'play-or-not-dm').trim();
+  const endpointUrl = new URL(
+    `${normalizeBaseUrl(process.env.DOUBAO_TTS_BASE_URL, DEFAULT_DOUBAO_TTS_API_BASE_URL)}${DEFAULT_DOUBAO_TTS_ENDPOINT_PATH}`,
+  );
+  const reqId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `tts-${Date.now()}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const upstreamResponse = await fetch(endpointUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        Accept: 'text/event-stream',
+        ...(apiKey
+          ? { 'X-Api-Key': apiKey }
+          : {
+              'X-Api-App-Id': appId,
+              'X-Api-Access-Key': accessToken,
+            }),
+        'X-Api-Resource-Id': resourceId,
+      },
+      body: JSON.stringify({
+        user: {
+          uid: userId,
+        },
+        namespace: 'BidirectionalTTS',
+        req_params: {
+          reqid: reqId,
+          speaker: voiceType,
+          text: body.text,
+          audio_params: {
+            format: audioEncoding,
+            sample_rate: sampleRate,
+            speed_ratio: speedRatio,
+            volume_ratio: volumeRatio,
+            pitch_ratio: pitchRatio,
+          },
+        },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!upstreamResponse.ok) {
+      const upstreamPayload = await upstreamResponse.text().catch(() => '');
+      return jsonResponse({
+        code: 'tts_upstream_error',
+        error: 'Doubao TTS request failed.',
+        provider: 'doubao_tts',
+        hint: 'Check API Key, Resource ID, and whether the selected voice belongs to the configured Doubao model.',
+        upstream_status: upstreamResponse.status,
+        upstream: upstreamPayload,
+      }, {
+        status: 502,
+      });
+    }
+
+    const audioBytes = await collectDoubaoAudioFromSse(upstreamResponse);
+
+    return new Response(audioBytes, {
+      status: 200,
+      headers: {
+        'Content-Type': resolveDoubaoAudioContentType(audioEncoding),
+        'Cache-Control': 'no-store',
+        'X-TTS-Provider': 'doubao_tts',
+        'X-TTS-Voice-Id': voiceType,
+      },
+    });
+  } catch (error: any) {
+    return jsonResponse({
+      code: 'tts_upstream_error',
+      error: 'Doubao TTS request failed.',
+      provider: 'doubao_tts',
+      hint: 'Check timeout settings and whether the selected Doubao voice and resource id belong to the same application.',
+      upstream: error?.message || String(error),
+    }, {
+      status: 502,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function getTtsStatus() {
+  const provider = resolveProvider();
+  const hasCosyVoiceServiceUrl = Boolean(
+    process.env.TTS_SERVICE_URL?.trim() || process.env.COSYVOICE_TTS_SERVICE_URL?.trim(),
+  );
+  const hasMiniMaxApiKey = Boolean(process.env.MINIMAX_TTS_API_KEY?.trim());
+  const hasDoubaoTtsConfig = hasDoubaoTtsConfiguredEnv();
+
+  if (provider === 'cosyvoice_service' || provider === 'tts_service') {
+    return {
+      current_provider: 'cosyvoice_service',
+      server_provider_configured: hasCosyVoiceServiceUrl,
+      upstream_healthy: hasCosyVoiceServiceUrl,
+    };
+  }
+
+  if (provider === 'doubao_tts') {
+    return {
+      current_provider: 'doubao_tts',
+      server_provider_configured: hasDoubaoTtsConfig,
+      upstream_healthy: hasDoubaoTtsConfig,
+      current_voice_id: (process.env.DOUBAO_TTS_VOICE_TYPE || DEFAULT_DOUBAO_TTS_VOICE_TYPE).trim(),
+    };
+  }
+
+  if (provider === 'minimax') {
+    return {
+      current_provider: 'minimax',
+      server_provider_configured: hasMiniMaxApiKey,
+      upstream_healthy: hasMiniMaxApiKey,
+    };
+  }
+
+  return {
+    current_provider: 'disabled',
+    server_provider_configured: false,
+    upstream_healthy: false,
+  };
+}
+
 async function handleFetchRequest(req: Request) {
   if (req.method === 'OPTIONS') {
     return optionsResponse(TTS_DOC);
   }
 
   if (req.method === 'GET') {
-    return documentationResponse(TTS_DOC);
+    return jsonResponse({
+      ...endpointDescription(TTS_DOC),
+      ...getTtsStatus(),
+    }, {
+      status: 200,
+      headers: {
+        Allow: TTS_DOC.allowedMethods.join(', '),
+      },
+    });
   }
 
   if (req.method !== 'POST') {
@@ -391,6 +730,10 @@ async function handleFetchRequest(req: Request) {
       return await proxyCosyVoiceService(parsed.body);
     }
 
+    if (provider === 'doubao_tts') {
+      return await proxyDoubaoTts(parsed.body);
+    }
+
     if (provider === 'minimax') {
       return await proxyMiniMax(parsed.body);
     }
@@ -398,7 +741,7 @@ async function handleFetchRequest(req: Request) {
     return jsonResponse({
       code: 'tts_unconfigured',
       error: 'Server-side TTS provider is not configured.',
-      hint: 'Set TTS_PROVIDER=cosyvoice_service and configure TTS_SERVICE_URL, or configure MiniMax credentials.',
+      hint: 'Set TTS_PROVIDER=doubao_tts with Doubao credentials, configure CosyVoice, or configure MiniMax credentials.',
     }, {
       status: 503,
     });

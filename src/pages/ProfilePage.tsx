@@ -1,6 +1,7 @@
 import { ChevronLeft, Heart, LogOut } from 'lucide-react';
 import GameCoverImage from '@/components/GameCoverImage';
 import { mockGames } from '@/data/mockData';
+import { shouldShowEnglishSubtitle } from '@/services/gameTextResolver';
 
 interface ProfilePageProps {
   onBack: () => void;
@@ -67,30 +68,36 @@ export default function ProfilePage({
 
           {favoriteGames.length > 0 ? (
             <div className="space-y-3">
-              {favoriteGames.map(game => (
-                <div
-                  key={game.id}
-                  onClick={() => onNavigateToGameDetail(game.id)}
-                  className="flex items-center gap-3 bg-white rounded-xl p-3 border-2 border-black cursor-pointer active:translate-y-0.5 transition-transform"
-                  style={{ boxShadow: '3px 3px 0 0 black' }}
-                >
-                  <GameCoverImage
-                    src={game.coverUrl}
-                    title={game.titleCn}
-                    subtitle={game.titleEn}
-                    className="w-16 h-16 rounded-lg object-cover border-2 border-black"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold truncate">{game.titleCn}</h4>
-                    <p className="text-xs text-gray-500">{game.titleEn}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">{game.minPlayers}-{game.maxPlayers}人</span>
-                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">{game.playtimeMin}min</span>
+              {favoriteGames.map((game) => {
+                const showEnglishSubtitle = shouldShowEnglishSubtitle(game);
+
+                return (
+                  <div
+                    key={game.id}
+                    onClick={() => onNavigateToGameDetail(game.id)}
+                    className="flex items-center gap-3 bg-white rounded-xl p-3 border-2 border-black cursor-pointer active:translate-y-0.5 transition-transform"
+                    style={{ boxShadow: '3px 3px 0 0 black' }}
+                  >
+                    <GameCoverImage
+                      src={game.coverUrl}
+                      title={game.titleCn}
+                      subtitle={showEnglishSubtitle ? game.titleEn : undefined}
+                      className="w-16 h-16 rounded-lg object-cover border-2 border-black"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold truncate">{game.titleCn}</h4>
+                      {showEnglishSubtitle ? (
+                        <p className="text-xs text-gray-500">{game.titleEn}</p>
+                      ) : null}
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">{game.minPlayers}-{game.maxPlayers}人</span>
+                        <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">{game.playtimeMin}min</span>
+                      </div>
                     </div>
+                    <ChevronLeft className="w-5 h-5 text-gray-400 rotate-180" />
                   </div>
-                  <ChevronLeft className="w-5 h-5 text-gray-400 rotate-180" />
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="bg-white rounded-2xl p-8 border-2 border-black text-center card-shadow-sm">

@@ -1,4 +1,5 @@
 import type { Game } from '@/types';
+import { shouldShowEnglishSubtitle } from '@/services/gameTextResolver';
 import GameCoverImage from './GameCoverImage';
 
 interface MiniGameCardProps {
@@ -7,6 +8,8 @@ interface MiniGameCardProps {
 }
 
 export default function MiniGameCard({ game, onClick }: MiniGameCardProps) {
+  const showEnglishSubtitle = shouldShowEnglishSubtitle(game);
+
   return (
     <div 
       onClick={onClick}
@@ -18,7 +21,7 @@ export default function MiniGameCard({ game, onClick }: MiniGameCardProps) {
         <GameCoverImage
           src={game.coverUrl}
           title={game.titleCn}
-          subtitle={game.titleEn}
+          subtitle={showEnglishSubtitle ? game.titleEn : undefined}
           className="w-full h-full object-cover"
         />
       </div>
@@ -26,6 +29,9 @@ export default function MiniGameCard({ game, onClick }: MiniGameCardProps) {
       {/* Info */}
       <div className="p-2">
         <h4 className="font-bold text-sm truncate">{game.titleCn}</h4>
+        {showEnglishSubtitle ? (
+          <p className="text-[10px] text-gray-500 truncate">{game.titleEn}</p>
+        ) : null}
         <p className="text-xs text-gray-500">{game.minPlayers}-{game.maxPlayers}人 · {game.playtimeMin}min</p>
         {game.tags[0] && (
           <span className="inline-block mt-1 text-[10px] bg-gray-100 px-2 py-0.5 rounded-full border border-gray-300">

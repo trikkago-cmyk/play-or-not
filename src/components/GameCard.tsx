@@ -1,6 +1,7 @@
 import { Users, Clock, Baby, Brain, Crown } from 'lucide-react';
 import type { Game } from '@/types';
 import GameCoverImage from './GameCoverImage';
+import { shouldShowEnglishSubtitle } from '@/services/gameTextResolver';
 
 interface GameCardProps {
   game: Game;
@@ -10,6 +11,8 @@ interface GameCardProps {
 }
 
 export default function GameCard({ game, onPlayThis, onChange }: GameCardProps) {
+  const showEnglishSubtitle = shouldShowEnglishSubtitle(game);
+
   return (
     <div className="game-card animate-slide-up">
       {/* Cover Image */}
@@ -17,7 +20,7 @@ export default function GameCard({ game, onPlayThis, onChange }: GameCardProps) 
         <GameCoverImage
           src={game.coverUrl}
           title={game.titleCn}
-          subtitle={game.titleEn}
+          subtitle={showEnglishSubtitle ? game.titleEn : undefined}
           className="w-full h-full object-cover"
         />
         {/* Best Match Badge */}
@@ -31,7 +34,9 @@ export default function GameCard({ game, onPlayThis, onChange }: GameCardProps) 
       <div className="p-3">
         {/* Title */}
         <h3 className="text-lg font-black text-black">{game.titleCn}</h3>
-        <p className="text-[10px] text-gray-500 mb-2">{game.titleEn}</p>
+        {showEnglishSubtitle ? (
+          <p className="text-[10px] text-gray-500 mb-2">{game.titleEn}</p>
+        ) : null}
 
         {/* Stats - Single Row */}
         <div className="flex gap-2 mb-2">
