@@ -884,6 +884,73 @@ describe('llmService Recommendation Consistency', () => {
         expect(result.text).toContain('- **');
     });
 
+    it('should inherit session constraints when the user asks to change the recommendation', async () => {
+        let observedSystemPrompt = '';
+
+        (globalThis.fetch as any).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+
+            if (url.includes('/api/rag')) {
+                return {
+                    ok: true,
+                    json: async () => ({ hits: [] })
+                } as Response;
+            }
+
+            if (url.includes('/api/chat')) {
+                const chatBody = JSON.parse(String(init?.body || '{}'));
+                observedSystemPrompt = chatBody.messages?.[0]?.content ?? '';
+
+                return {
+                    ok: true,
+                    json: async () => ({
+                        choices: [{ message: { content: JSON.stringify({
+                            reply: '那我强烈推荐 **《失落的城市》**，两个人默契升温。',
+                            recommendation_name: '失落的城市',
+                            recommendation_id: 'lostcities'
+                        }) } }]
+                    })
+                } as Response;
+            }
+
+            throw new Error(`Unexpected fetch URL: ${url}`);
+        });
+
+        const result = await getLLMResponse(
+            '换一个',
+            'recommendation',
+            undefined,
+            [
+                {
+                    role: 'user',
+                    content: '6 个人，需要纸笔规划、图图写写的，有种轻松有趣的氛围。',
+                },
+                {
+                    role: 'assistant',
+                    content: '我会先推 **《王国制图师》**。',
+                },
+            ],
+            ['cartographers'],
+        );
+
+        const recommendedGame = GAME_DATABASE.find((game) => game.id === result.gameId);
+        const recommendationTags = [
+            ...(recommendedGame?.recommendationProfile?.allTags ?? []),
+            ...(recommendedGame?.tags ?? []),
+            recommendedGame?.oneLiner ?? '',
+        ].join(' ');
+
+        expect(observedSystemPrompt).toContain('上一轮仍有效的需求');
+        expect(observedSystemPrompt).toContain('6 个人');
+        expect(observedSystemPrompt).toContain('纸笔规划');
+        expect(recommendedGame).toBeDefined();
+        expect(recommendedGame!.id).not.toBe('lostcities');
+        expect(recommendedGame!.minPlayers).toBeLessThanOrEqual(6);
+        expect(recommendedGame!.maxPlayers).toBeGreaterThanOrEqual(6);
+        expect(recommendationTags).toContain('纸笔规划');
+        expect(result.text).toContain(`**《${recommendedGame!.titleCn}》**`);
+    });
+
     it('should not leak reasoning text into the visible streaming preview and should use the completed payload as final text', async () => {
         const previewUpdates: string[] = [];
         const encoder = new TextEncoder();

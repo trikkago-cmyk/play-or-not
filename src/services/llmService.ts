@@ -90,6 +90,7 @@ interface PromptContext {
   retrievedRuleCitations?: InternalWikiCitation[];
   recommendationContext?: string;
   excludedRecommendationNames?: string[];
+  recommendationSessionContext?: string;
 }
 
 interface RecommendationCandidate {
@@ -132,6 +133,7 @@ interface PreparedLlmTurn {
   recommendationIntent: RecommendationIntent;
   recommendationCandidates: RecommendationCandidate[];
   excludedRecommendationNames: string[];
+  recommendationSessionContext?: string;
   messages: { role: string; content: string }[];
   directAnswer?: string;
 }
@@ -959,6 +961,180 @@ function buildRecommendationConversationalReply(userInput: string): string | nul
   return null;
 }
 
+function isRecommendationChangeRequest(userInput: string): boolean {
+  const normalized = normalizeCompactUserInput(userInput);
+  if (!normalized) {
+    return false;
+  }
+
+  return /(换一个|换个|再来一个|再换|还有吗|不要这个|不想要这个|类似的|同类型|下一个)/.test(normalized);
+}
+
+function hasExplicitPlayerSignal(intent: RecommendationIntent): boolean {
+  return typeof intent.requestedPlayerCount === 'number'
+    || typeof intent.requestedPlayerRangeMin === 'number'
+    || typeof intent.requestedPlayerRangeMax === 'number';
+}
+
+function hasExplicitIntentSignal(intent: RecommendationIntent): boolean {
+  return hasStrictRecommendationConstraint(intent)
+    || intent.desiredTags.length > 0
+    || intent.searchTerms.length > 0;
+}
+
+function stripPlayerIntentTags(tags: string[]): string[] {
+  const playerIntentTags = new Set(['双人核心', '3到4人佳', '5人以上佳', '大团体适配']);
+  return tags.filter((tag) => !playerIntentTags.has(tag));
+}
+
+function stripComplexityIntentTags(tags: string[]): string[] {
+  const complexityIntentTags = new Set(['新手友好', '轻策略', '中策略', '重策略', '烧脑策略']);
+  return tags.filter((tag) => !complexityIntentTags.has(tag));
+}
+
+function mergeRecommendationIntents(
+  inheritedIntent: RecommendationIntent | null,
+  currentIntent: RecommendationIntent,
+): RecommendationIntent {
+  if (!inheritedIntent) {
+    return currentIntent;
+  }
+
+  const currentHasPlayerSignal = hasExplicitPlayerSignal(currentIntent);
+  const inheritedDesiredTags = currentHasPlayerSignal
+    ? stripPlayerIntentTags(inheritedIntent.desiredTags)
+    : inheritedIntent.desiredTags;
+  const currentHasComplexitySignal =
+    typeof currentIntent.minComplexity === 'number'
+    || typeof currentIntent.maxComplexity === 'number';
+  const inheritedComplexityAwareTags = currentHasComplexitySignal
+    ? stripComplexityIntentTags(inheritedDesiredTags)
+    : inheritedDesiredTags;
+
+  const inheritedPlayerRange =
+    typeof inheritedIntent.requestedPlayerRangeMin === 'number'
+    || typeof inheritedIntent.requestedPlayerRangeMax === 'number';
+  const currentPlayerRange =
+    typeof currentIntent.requestedPlayerRangeMin === 'number'
+    || typeof currentIntent.requestedPlayerRangeMax === 'number';
+
+  return {
+    requestedPlayerCount: currentHasPlayerSignal
+      ? currentIntent.requestedPlayerCount
+      : inheritedPlayerRange
+        ? undefined
+        : inheritedIntent.requestedPlayerCount,
+    requestedPlayerRangeMin: currentPlayerRange
+      ? currentIntent.requestedPlayerRangeMin
+      : inheritedIntent.requestedPlayerRangeMin,
+    requestedPlayerRangeMax: currentPlayerRange
+      ? currentIntent.requestedPlayerRangeMax
+      : inheritedIntent.requestedPlayerRangeMax,
+    maxPlaytime: typeof currentIntent.maxPlaytime === 'number'
+      ? currentIntent.maxPlaytime
+      : inheritedIntent.maxPlaytime,
+    minComplexity: typeof currentIntent.minComplexity === 'number'
+      ? currentIntent.minComplexity
+      : inheritedIntent.minComplexity,
+    maxComplexity: typeof currentIntent.maxComplexity === 'number'
+      ? currentIntent.maxComplexity
+      : inheritedIntent.maxComplexity,
+    maxAgeRating: typeof currentIntent.maxAgeRating === 'number'
+      ? currentIntent.maxAgeRating
+      : inheritedIntent.maxAgeRating,
+    desiredTags: uniqueStrings([
+      ...inheritedComplexityAwareTags,
+      ...currentIntent.desiredTags,
+    ]),
+    searchTerms: uniqueStrings([
+      ...inheritedIntent.searchTerms,
+      ...currentIntent.searchTerms,
+    ]),
+  };
+}
+
+function findLastSubstantiveRecommendationTurn(
+  history: { role: 'user' | 'assistant'; content: string }[],
+): { question: string; intent: RecommendationIntent } | null {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const item = history[index];
+    if (item.role !== 'user') {
+      continue;
+    }
+
+    const question = extractPrimaryRecommendationSignal(extractCurrentUserQuestion(item.content));
+    if (!question || isRecommendationChangeRequest(question)) {
+      continue;
+    }
+
+    if (
+      SMALLTALK_ONLY_PATTERN.test(normalizeCompactUserInput(question))
+      || RECOMMENDATION_META_QUERY_PATTERN.test(normalizeCompactUserInput(question))
+    ) {
+      continue;
+    }
+
+    const intent = parseRecommendationIntent(question);
+    if (hasExplicitIntentSignal(intent)) {
+      return { question, intent };
+    }
+  }
+
+  return null;
+}
+
+function buildRecommendationSessionContextLine(
+  inheritedQuestion: string,
+  currentQuestion: string,
+  didInherit: boolean,
+): string {
+  if (!didInherit) {
+    return '';
+  }
+
+  return [
+    '【本轮会话意图判断】',
+    `上一轮仍有效的需求：${inheritedQuestion}`,
+    `当前用户这句话：${currentQuestion}`,
+    '请把当前句理解为对上一轮需求的延续/修正；除非当前句明确覆盖，否则人数、时长、复杂度、年龄、机制和氛围偏好继续生效。',
+  ].join('\n');
+}
+
+function resolveRecommendationIntentWithSessionContext(
+  currentQuestion: string,
+  history: { role: 'user' | 'assistant'; content: string }[],
+): {
+  intent: RecommendationIntent;
+  sessionContextLine?: string;
+} {
+  const currentIntent = parseRecommendationIntent(currentQuestion);
+  const inheritedTurn = findLastSubstantiveRecommendationTurn(history);
+  if (!inheritedTurn) {
+    return { intent: currentIntent };
+  }
+
+  const currentHasIntent = hasExplicitIntentSignal(currentIntent);
+  const shouldInherit =
+    isRecommendationChangeRequest(currentQuestion)
+    || !currentHasIntent
+    || /^(更|再|还|继续|不要|别|换|类似|同样|同类型)/.test(normalizeCompactUserInput(currentQuestion));
+
+  if (!shouldInherit) {
+    return { intent: currentIntent };
+  }
+
+  const mergedIntent = mergeRecommendationIntents(inheritedTurn.intent, currentIntent);
+
+  return {
+    intent: mergedIntent,
+    sessionContextLine: buildRecommendationSessionContextLine(
+      inheritedTurn.question,
+      currentQuestion,
+      true,
+    ),
+  };
+}
+
 function getStructuredRecommendationTags(game: Game): string[] {
   return game.recommendationProfile?.allTags ?? game.tags;
 }
@@ -1063,6 +1239,9 @@ function parseRecommendationIntent(query: string): RecommendationIntent {
   }
   if (/拼图|版图|板块|铺砖|摆放/.test(normalizedQuery)) {
     addIntent(['拼图布局'], ['拼图', '版图', '板块', '铺砖', '摆放']);
+  }
+  if (/纸笔|写写画画|图图写写|画画|涂涂写写|roll\s*and\s*write|flip\s*and\s*write/.test(normalizedQuery)) {
+    addIntent(['纸笔规划'], ['纸笔', '纸笔规划', '同步行动', '多人同玩', '写写画画']);
   }
   if (/工人|工放|行动位|卡位/.test(normalizedQuery)) {
     addIntent(['工人放置'], ['工人放置', '工放', '行动位', '卡位']);
@@ -1706,6 +1885,7 @@ function getSystemInstruction({
   retrievedRuleCitations = [],
   recommendationContext,
   excludedRecommendationNames = [],
+  recommendationSessionContext = '',
 }: PromptContext): string {
   const basePersona = `
     你叫“DM 洛思”。你是一个热情、直率、懂气氛的桌游组局王。
@@ -1769,6 +1949,7 @@ function getSystemInstruction({
       ${basePersona}
       
       【当前模式】：推销员 / 推荐模式
+      ${recommendationSessionContext}
       ${recommendationAvailabilityBlock}
       ${recommendationContextBlock}
       ${excludedRecommendationBlock}
@@ -2334,6 +2515,7 @@ async function prepareLlmTurn(
   let recommendationContext = '';
   let recommendationIntent: RecommendationIntent = { desiredTags: [], searchTerms: [] };
   let recommendationCandidates: RecommendationCandidate[] = [];
+  let recommendationSessionContext = '';
   const shouldUseKnowledgeRetrieval = !shouldSkipKnowledgeRetrieval(currentUserQuestion, mode);
   const excludedRecommendationNames = excludeIds
     .map((gameId) => GAME_DATABASE.find((game) => game.id === gameId)?.titleCn)
@@ -2356,6 +2538,7 @@ async function prepareLlmTurn(
       recommendationIntent,
       recommendationCandidates,
       excludedRecommendationNames,
+      recommendationSessionContext,
       messages: [],
       directAnswer: directRefereeAnswer,
     };
@@ -2370,6 +2553,7 @@ async function prepareLlmTurn(
       recommendationIntent,
       recommendationCandidates,
       excludedRecommendationNames,
+      recommendationSessionContext,
       messages: [],
       directAnswer: directRecommendationAnswer,
     };
@@ -2380,7 +2564,9 @@ async function prepareLlmTurn(
     retrievedRulesContext = evidencePack.contextText;
     retrievedRuleCitations = evidencePack.citations;
   } else if (mode === 'recommendation' && shouldUseKnowledgeRetrieval) {
-    recommendationIntent = parseRecommendationIntent(currentUserQuestion);
+    const sessionIntent = resolveRecommendationIntentWithSessionContext(currentUserQuestion, history);
+    recommendationIntent = sessionIntent.intent;
+    recommendationSessionContext = sessionIntent.sessionContextLine ?? '';
     recommendationCandidates = buildLocalRecommendationCandidates(currentUserQuestion, recommendationIntent, excludeIds);
     if (recommendationCandidates.length > 0) {
       recommendationContext = formatRecommendationContext(recommendationCandidates, recommendationIntent);
@@ -2394,6 +2580,7 @@ async function prepareLlmTurn(
     retrievedRuleCitations,
     recommendationContext,
     excludedRecommendationNames,
+    recommendationSessionContext,
   });
 
   const messages = [
@@ -2410,6 +2597,7 @@ async function prepareLlmTurn(
     recommendationIntent,
     recommendationCandidates,
     excludedRecommendationNames,
+    recommendationSessionContext,
     messages,
   };
 }

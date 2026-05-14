@@ -4,7 +4,6 @@ import type { Game, ChatMessage } from '@/types';
 import GameCard from '@/components/GameCard';
 import MiniGameCard from '@/components/MiniGameCard';
 import { dialogueAgent } from '@/services/ragService';
-import { getSimilarGames } from '@/services/ragService';
 import { isMockMode, setMockMode, saveLLMConfig, initLLMConfig } from '@/services/llmService';
 import { getDmTtsEnabled, hasDmTtsPrimedPlayback, isDmTtsSupported, preloadDmVoices, primeDmTtsPlayback, setDmTtsEnabled, speakAsDm, stopDmTtsPlayback } from '@/services/dmTtsService';
 import { mockGames } from '@/data/mockData';
@@ -24,11 +23,6 @@ interface ChatPageProps {
   targetRefereeGameId?: string | null;
   onRefereeModeEntered?: () => void;
 }
-
-type AssistantRevealState = {
-  isComplete: boolean;
-  visibleLength: number;
-};
 
 const INITIAL_MESSAGE = '嘿！我是你的桌游DM。\n今天几个人？想玩点什么感觉的？';
 // 场景标签
@@ -103,11 +97,8 @@ export default function ChatPage({
     new Set((initialMessages || []).filter((message) => message.role === 'assistant').map((message) => message.id)),
   );
   const speakingAssistantMessageIdsRef = useRef<Set<string>>(new Set());
-  const revealIntervalIdsRef = useRef<Record<string, number>>({});
 
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || []);
-  const [assistantRevealStates, setAssistantRevealStates] = useState<Record<string, AssistantRevealState>>({});
-  const [assistantRevealTick, setAssistantRevealTick] = useState(0);
 
   // 初始化LLM配置
   useEffect(() => {
@@ -246,89 +237,6 @@ export default function ChatPage({
   useEffect(() => {
     scrollToBottom();
   }, [messages, displayedText]);
-
-  useEffect(() => {
-    if (assistantRevealTick === 0) {
-      return;
-    }
-
-    scrollToBottom('auto');
-  }, [assistantRevealTick]);
-
-  useEffect(() => {
-    return () => {
-      Object.values(revealIntervalIdsRef.current).forEach((intervalId) => {
-        window.clearInterval(intervalId);
-      });
-      revealIntervalIdsRef.current = {};
-    };
-  }, []);
-
-  const clearAssistantRevealInterval = (messageId: string) => {
-    const intervalId = revealIntervalIdsRef.current[messageId];
-    if (typeof intervalId === 'number') {
-      window.clearInterval(intervalId);
-      delete revealIntervalIdsRef.current[messageId];
-    }
-  };
-
-  const getAssistantRevealStep = (content: string) => {
-    if (content.length >= 240) {
-      return 8;
-    }
-    if (content.length >= 160) {
-      return 6;
-    }
-    if (content.length >= 100) {
-      return 5;
-    }
-    return 4;
-  };
-
-  const startAssistantReveal = (message: ChatMessage) => {
-    if (!message.gameCard || !message.content.trim()) {
-      return;
-    }
-
-    clearAssistantRevealInterval(message.id);
-
-    const fullLength = message.content.length;
-    const revealStep = getAssistantRevealStep(message.content);
-    let visibleLength = 0;
-
-    setAssistantRevealStates((prev) => ({
-      ...prev,
-      [message.id]: {
-        isComplete: false,
-        visibleLength: 0,
-      },
-    }));
-
-    revealIntervalIdsRef.current[message.id] = window.setInterval(() => {
-      visibleLength = Math.min(fullLength, visibleLength + revealStep);
-      const isComplete = visibleLength >= fullLength;
-
-      setAssistantRevealStates((prev) => ({
-        ...prev,
-        [message.id]: {
-          isComplete,
-          visibleLength,
-        },
-      }));
-
-      if (isComplete) {
-        clearAssistantRevealInterval(message.id);
-        return;
-      }
-
-      setAssistantRevealTick((prev) => prev + 1);
-    }, 26);
-  };
-
-  const appendAssistantMessage = (message: ChatMessage) => {
-    setMessages((prev) => [...prev, message]);
-    startAssistantReveal(message);
-  };
 
   const updateAssistantMessage = (messageId: string, updater: (message: ChatMessage) => ChatMessage) => {
     setMessages((prev) => prev.map((message) => (message.id === messageId ? updater(message) : message)));
@@ -882,35 +790,13 @@ export default function ChatPage({
 
     if (shownIds.length === 0) return;
 
-    const lastGameId = shownIds[shownIds.length - 1];
-    let similarGames = getSimilarGames(lastGameId, shownIds);
-
-    // Initial Fallback: If no similar games, try ANY unshown games
-    if (similarGames.length === 0) {
-      const allGames = mockGames;
-      similarGames = allGames.filter(g => !shownIds.includes(g.id) && g.id !== lastGameId);
-    }
-
-    if (similarGames.length > 0) {
-      // Pick random one from the candidates to simulate variety
-      const newGame = similarGames[Math.floor(Math.random() * similarGames.length)];
-
-      await runDialogueTurn({
-        userVisibleText: '换一个',
-        llmQuery: `换一个，类似${newGame.titleCn}`,
-        turnMode: 'recommendation',
-      });
-      // Increment change count - show batch button after 2 changes
-      setChangeCount(prev => prev + 1);
-    } else {
-      const aiMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: '游戏库里的游戏都推荐一遍啦！\n\n要不我们重置会话，重新聊聊？',
-        timestamp: Date.now(),
-      };
-      appendAssistantMessage(aiMessage);
-    }
+    await runDialogueTurn({
+      userVisibleText: '换一个',
+      llmQuery: '换一个',
+      turnMode: 'recommendation',
+    });
+    // Increment change count - show batch button after 2 changes
+    setChangeCount(prev => prev + 1);
   };
 
   // "换一批" - 在对话流中新增一批横向卡片
@@ -1040,13 +926,8 @@ export default function ChatPage({
     }
 
     if (message.role === 'assistant') {
-      const revealState = assistantRevealStates[message.id];
       const isStreamingAssistant = message.isStreaming === true;
-      const isRevealingRecommendation = Boolean(message.gameCard && revealState && !revealState.isComplete);
-      const visibleAssistantContent = isRevealingRecommendation
-        ? message.content.slice(0, revealState.visibleLength)
-        : message.content;
-      const shouldShowGameCard = Boolean(message.gameCard && (!revealState || revealState.isComplete));
+      const shouldShowGameCard = Boolean(message.gameCard && !isStreamingAssistant);
 
       return (
         <div key={message.id} className="animate-fade-in">
@@ -1065,8 +946,6 @@ export default function ChatPage({
                 `}>
                 {isStreamingAssistant ? (
                   <MarkdownText content={message.content} className="min-h-[1.5em]" showCursor />
-                ) : isRevealingRecommendation ? (
-                  <MarkdownText content={visibleAssistantContent} className="min-h-[1.5em]" showCursor />
                 ) : (
                   <MarkdownText content={message.content} />
                 )}
@@ -1099,7 +978,7 @@ export default function ChatPage({
               )}
 
               {/* In the last message, show "换一批" button after 2 changes */}
-              {idx === lastMessageIndex && changeCount >= 2 && !message.batchCards && mode === 'recommendation' && !isRevealingRecommendation && (
+              {idx === lastMessageIndex && changeCount >= 2 && !message.batchCards && mode === 'recommendation' && (
                 <Button
                   onClick={handleNextBatch}
                   disabled={isProcessing || isTranscribing}
