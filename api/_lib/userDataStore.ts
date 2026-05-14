@@ -1,5 +1,4 @@
 import { Redis } from '@upstash/redis';
-import { get as getBlob, put as putBlob } from '@vercel/blob';
 
 export interface StoredUserData {
   version: 1;
@@ -130,6 +129,67 @@ async function getUserDataBlobPath(email: string) {
   return `play-or-not/user-data/v1/${await hashEmailForKey(email)}.json`;
 }
 
+function getBlobStoreId(token: string) {
+  const [, , , storeId = ''] = token.split('_');
+  return storeId;
+}
+
+function getBlobReadUrl(pathname: string, token: string) {
+  const storeId = getBlobStoreId(token);
+  if (!storeId) {
+    throw new Error('Invalid BLOB_READ_WRITE_TOKEN: unable to extract store id.');
+  }
+
+  const encodedPathname = pathname.split('/').map(encodeURIComponent).join('/');
+  return `https://${storeId}.private.blob.vercel-storage.com/${encodedPathname}`;
+}
+
+async function readBlobUserData(pathname: string, token: string) {
+  const url = new URL(getBlobReadUrl(pathname, token));
+  url.searchParams.set('cache', '0');
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Vercel Blob read failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function writeBlobUserData(pathname: string, data: StoredUserData, token: string) {
+  const requestId = `${getBlobStoreId(token)}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
+  const params = new URLSearchParams({ pathname });
+  const response = await fetch(`https://vercel.com/api/blob/?${params.toString()}`, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'x-api-version': '12',
+      'x-api-blob-request-id': requestId,
+      'x-api-blob-request-attempt': '0',
+      'x-vercel-blob-access': 'private',
+      'x-allow-overwrite': '1',
+      'x-content-type': 'application/json; charset=utf-8',
+      'x-cache-control-max-age': '60',
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`Vercel Blob write failed: ${response.status}${errorText ? ` ${errorText}` : ''}`);
+  }
+}
+
 function assertStoreAvailable() {
   if (getStorageProvider() === 'local_memory' && isVercelRuntime()) {
     throw new UserDataStoreNotConfiguredError();
@@ -149,17 +209,7 @@ export async function readUserData(email: string): Promise<StoredUserData> {
 
   const blobToken = getBlobToken();
   if (blobToken) {
-    const blob = await getBlob(await getUserDataBlobPath(email), {
-      access: 'private',
-      token: blobToken,
-      useCache: false,
-    });
-    if (!blob || blob.statusCode !== 200 || !blob.stream) {
-      return defaultUserData();
-    }
-
-    const text = await new Response(blob.stream).text();
-    return sanitizeStoredUserData(JSON.parse(text));
+    return sanitizeStoredUserData(await readBlobUserData(await getUserDataBlobPath(email), blobToken));
   }
 
   return sanitizeStoredUserData(localFallbackStore.get(key));
@@ -183,13 +233,7 @@ export async function writeUserData(email: string, data: Partial<StoredUserData>
 
   const blobToken = getBlobToken();
   if (blobToken) {
-    await putBlob(await getUserDataBlobPath(email), JSON.stringify(nextData), {
-      access: 'private',
-      allowOverwrite: true,
-      contentType: 'application/json; charset=utf-8',
-      token: blobToken,
-      cacheControlMaxAge: 60,
-    });
+    await writeBlobUserData(await getUserDataBlobPath(email), nextData, blobToken);
     return nextData;
   }
 
