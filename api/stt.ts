@@ -11,6 +11,9 @@ export const config = {
     runtime: 'edge',
 };
 
+const PRODUCTION_STT_HOSTNAME = 'play-or-not-dm.vercel.app';
+const STT_PROXY_FALLBACK_URL = process.env.STT_PROXY_FALLBACK_URL?.trim() || `https://${PRODUCTION_STT_HOSTNAME}/api/stt`;
+
 const STT_DOC: EndpointDoc = {
     endpoint: '/api/stt',
     title: '语音转文字接口',
@@ -44,6 +47,56 @@ function baseUrlRequiresApiKey(baseUrl: string) {
     return /groq\.com|openai\.com/i.test(baseUrl);
 }
 
+function resolveRequestHostname(req: Request) {
+    const forwardedHost = req.headers.get('x-forwarded-host')?.trim();
+    if (forwardedHost) {
+        return forwardedHost;
+    }
+
+    try {
+        return new URL(req.url).hostname;
+    } catch {
+        return '';
+    }
+}
+
+function shouldUsePreviewSttProxyFallback(req: Request, requiresApiKey: boolean, sttApiKey: string) {
+    if (!requiresApiKey || sttApiKey) {
+        return false;
+    }
+
+    if (req.headers.get('x-stt-proxy-fallback') === '1') {
+        return false;
+    }
+
+    const deploymentEnv = (process.env.VERCEL_ENV || process.env.VERCEL_TARGET_ENV || '').trim().toLowerCase();
+    if (deploymentEnv === 'preview') {
+        return true;
+    }
+
+    if (deploymentEnv === 'production') {
+        return false;
+    }
+
+    const hostname = resolveRequestHostname(req);
+    if (!hostname || hostname === PRODUCTION_STT_HOSTNAME) {
+        return false;
+    }
+
+    return hostname.endsWith('.vercel.app');
+}
+
+function isBlobLike(value: unknown): value is Blob {
+    return typeof value === 'object'
+        && value !== null
+        && typeof (value as Blob).arrayBuffer === 'function'
+        && typeof (value as Blob).type === 'string';
+}
+
+function isFileLike(value: unknown): value is File {
+    return isBlobLike(value) && typeof (value as File).name === 'string';
+}
+
 export default async function handler(req: Request) {
     if (req.method === 'OPTIONS') {
         return optionsResponse(STT_DOC);
@@ -70,10 +123,37 @@ export default async function handler(req: Request) {
             );
         }
 
+        const sttBaseUrl = (process.env.STT_BASE_URL || 'https://api.groq.com/openai/v1').trim();
+        const sttApiKey = process.env.STT_API_KEY?.trim() || '';
+        const sttModel = (process.env.STT_MODEL || 'whisper-large-v3').trim();
+        const sttLanguage = (process.env.STT_LANGUAGE || 'zh').trim();
+        const sttPrompt = (process.env.STT_PROMPT || 'The audio is Mandarin Chinese. Transcribe faithfully in Chinese and do not translate.').trim();
+        const requiresApiKey = baseUrlRequiresApiKey(sttBaseUrl);
+
+        if (shouldUsePreviewSttProxyFallback(req, requiresApiKey, sttApiKey)) {
+            const proxyResponse = await fetch(STT_PROXY_FALLBACK_URL, {
+                method: 'POST',
+                headers: {
+                    'content-type': contentType,
+                    'x-stt-proxy-fallback': '1',
+                },
+                body: await req.arrayBuffer(),
+            });
+
+            const proxyHeaders = new Headers(proxyResponse.headers);
+            proxyHeaders.set('x-stt-fallback', 'production-proxy');
+            proxyHeaders.set('Cache-Control', 'no-store');
+
+            return new Response(proxyResponse.body, {
+                status: proxyResponse.status,
+                headers: proxyHeaders,
+            });
+        }
+
         const formData = await req.formData();
         const file = formData.get('file');
 
-        if (!(file instanceof File)) {
+        if (!isBlobLike(file)) {
             return validationError(
                 STT_DOC,
                 'missing_parameter',
@@ -83,12 +163,10 @@ export default async function handler(req: Request) {
             );
         }
 
-        const sttBaseUrl = (process.env.STT_BASE_URL || 'https://api.groq.com/openai/v1').trim();
-        const sttApiKey = process.env.STT_API_KEY?.trim() || '';
-        const sttModel = (process.env.STT_MODEL || 'whisper-large-v3').trim();
-        const sttLanguage = (process.env.STT_LANGUAGE || 'zh').trim();
-        const sttPrompt = (process.env.STT_PROMPT || 'The audio is Mandarin Chinese. Transcribe faithfully in Chinese and do not translate.').trim();
-        const requiresApiKey = baseUrlRequiresApiKey(sttBaseUrl);
+        const audioBlob: Blob = file;
+        const audioFile = isFileLike(audioBlob)
+            ? audioBlob
+            : new File([audioBlob], 'audio.webm', { type: audioBlob.type || 'audio/webm' });
 
         if (!sttApiKey && requiresApiKey) {
             return jsonResponse({
@@ -99,7 +177,7 @@ export default async function handler(req: Request) {
         }
 
         const proxyFormData = new FormData();
-        proxyFormData.append('file', file, file.name || 'audio.webm');
+        proxyFormData.append('file', audioFile, audioFile.name || 'audio.webm');
         proxyFormData.append('model', sttModel);
         proxyFormData.append('response_format', 'json');
         proxyFormData.append('temperature', '0');

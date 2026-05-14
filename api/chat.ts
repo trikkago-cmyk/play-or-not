@@ -8,8 +8,38 @@ import {
 } from './_lib/agentDocs.js';
 
 export const config = {
-    runtime: 'edge', // Use Edge runtime for better performance
+    runtime: 'edge',
 };
+
+const ARK_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
+const DEFAULT_ARK_RESPONSES_MODEL = 'deepseek-v3-2-251201';
+const DEFAULT_ARK_CHAT_MODEL = 'deepseek-v3-2-251201';
+const DEFAULT_MAX_TOKENS = 1000;
+const UPSTREAM_TIMEOUT_MS = 15000;
+const ARK_RESPONSES_MODELS = new Set([
+    'deepseek-v3-2-251201',
+    'doubao-seed-2-0-mini-260428',
+    'doubao-seed-2-0-pro-260215',
+]);
+
+type ChatMessage = {
+    role?: string;
+    content?: unknown;
+};
+
+type ResponseInputPart = {
+    type: string;
+    [key: string]: unknown;
+};
+
+const DEFAULT_DM_SYSTEM_PROMPT = [
+    '你叫“DM 洛思”，是一个热情、直率、懂气氛的桌游 DM。',
+    '始终使用简体中文，像一个懂桌游、会带场子的朋友一样说话。',
+    '不要自称 DeepSeek、豆包、GLM、AI 模型或其他供应商身份。',
+    '闲聊时简短回应，并自然把话题引回桌游推荐或规则裁判。',
+    '推荐游戏时每轮只推荐 1 款，先讲为什么适合当前用户意图，再给 2 到 3 个短亮点，最后自然收尾。',
+    '裁判回答要先给结论，再用人话解释关键规则；不要泄露内部检索、候选池、参考依据或模型思考过程。',
+].join('\n');
 
 const CHAT_DOC: EndpointDoc = {
     endpoint: '/api/chat',
@@ -17,12 +47,14 @@ const CHAT_DOC: EndpointDoc = {
     description: '面向桌游推荐、规则解释和裁判追问的聊天接口。POST 使用 JSON 请求体，GET 返回接口说明。',
     allowedMethods: ['GET', 'POST', 'OPTIONS'],
     requestContentType: 'application/json',
-    requiredFields: ['messages'],
+    requiredFields: ['messages | input'],
     optionalFields: {
         task: '可选，推荐的任务类型：recommend_game、explain_rules、referee_followup。',
         model: '可选，上游模型名称；默认使用服务端配置或默认值。',
         max_tokens: '可选，最大输出 token 数，默认 1000。',
         temperature: '可选，采样温度；推荐推荐模式 0.7、规则问答更低。',
+        input: '可选，直接透传给 Ark Responses API 的 input 结构，适合多模态或自定义消息格式。',
+        stream: '可选，true 时透传上游 SSE 流。',
         providerBaseUrl: '可选，上游兼容 OpenAI chat completions 的 base URL。',
         userApiKey: '可选，自带上游 API key；若服务端已配置则可省略。',
     },
@@ -34,7 +66,7 @@ const CHAT_DOC: EndpointDoc = {
     limitations: [
         '当前接口不公开创建账号、写入用户偏好或持久化会话状态。',
         '当前没有公开的 OAuth、service account 或 API key 管理页。',
-        '返回结果为上游聊天补全格式透传，字段可能随模型提供方略有差异。',
+        '服务端会把 Ark Responses API 结果归一成 chat completions 风格，便于前端兼容。',
     ],
     notes: [
         '若只想先了解怎么调用，直接 GET /api/chat 即可获得机器可读说明。',
@@ -85,6 +117,204 @@ const CHAT_DOC: EndpointDoc = {
     },
 };
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeRole(role: unknown): 'system' | 'user' | 'assistant' {
+    if (role === 'system' || role === 'assistant' || role === 'user') {
+        return role;
+    }
+
+    return 'user';
+}
+
+function normalizeResponseInputPart(part: unknown): ResponseInputPart | null {
+    if (typeof part === 'string') {
+        return {
+            type: 'input_text',
+            text: part,
+        };
+    }
+
+    if (!isPlainObject(part)) {
+        if (typeof part === 'undefined' || part === null) {
+            return null;
+        }
+
+        return {
+            type: 'input_text',
+            text: String(part),
+        };
+    }
+
+    if (part.type === 'input_text' && typeof part.text === 'string') {
+        return {
+            type: 'input_text',
+            text: part.text,
+        };
+    }
+
+    if (part.type === 'text' && typeof part.text === 'string') {
+        return {
+            type: 'input_text',
+            text: part.text,
+        };
+    }
+
+    if (part.type === 'input_image' && typeof part.image_url !== 'undefined') {
+        return {
+            type: 'input_image',
+            image_url: part.image_url,
+        };
+    }
+
+    if (part.type === 'image_url' && typeof part.image_url !== 'undefined') {
+        return {
+            type: 'input_image',
+            image_url: part.image_url,
+        };
+    }
+
+    if (typeof part.image_url !== 'undefined') {
+        return {
+            type: 'input_image',
+            image_url: part.image_url,
+        };
+    }
+
+    if (typeof part.text === 'string') {
+        return {
+            type: 'input_text',
+            text: part.text,
+        };
+    }
+
+    return {
+        type: 'input_text',
+        text: JSON.stringify(part),
+    };
+}
+
+function normalizeResponseInputContent(content: unknown): ResponseInputPart[] {
+    if (Array.isArray(content)) {
+        return content
+            .map((part) => normalizeResponseInputPart(part))
+            .filter((part): part is ResponseInputPart => Boolean(part));
+    }
+
+    const normalizedPart = normalizeResponseInputPart(content);
+    return normalizedPart ? [normalizedPart] : [];
+}
+
+function buildResponsesInputFromMessages(messages: ChatMessage[]): Array<{ role: 'system' | 'user' | 'assistant'; content: ResponseInputPart[] }> {
+    return messages
+        .map((message) => ({
+            role: normalizeRole(message.role),
+            content: normalizeResponseInputContent(message.content),
+        }))
+        .filter((message) => message.content.length > 0);
+}
+
+function messageHasSystemPrompt(messages: ChatMessage[]): boolean {
+    return messages.some((message) => normalizeRole(message.role) === 'system');
+}
+
+function withDefaultDmSystemPrompt(messages: ChatMessage[]): ChatMessage[] {
+    if (messageHasSystemPrompt(messages)) {
+        return messages;
+    }
+
+    return [
+        {
+            role: 'system',
+            content: DEFAULT_DM_SYSTEM_PROMPT,
+        },
+        ...messages,
+    ];
+}
+
+function isArkBaseUrl(baseUrl: string): boolean {
+    return baseUrl.includes('ark.cn-beijing.volces.com/api/v3');
+}
+
+function shouldUseResponsesApi(baseUrl: string, model: string, input: unknown): boolean {
+    if (typeof input !== 'undefined') {
+        return true;
+    }
+
+    return isArkBaseUrl(baseUrl) && ARK_RESPONSES_MODELS.has(model);
+}
+
+function extractAssistantTextFromResponses(payload: any): string {
+    const textParts: string[] = [];
+
+    if (Array.isArray(payload?.output)) {
+        for (const item of payload.output) {
+            if (!item || item.type !== 'message' || item.role !== 'assistant' || !Array.isArray(item.content)) {
+                continue;
+            }
+
+            for (const part of item.content) {
+                if (!part) {
+                    continue;
+                }
+
+                if (typeof part.text === 'string' && (part.type === 'output_text' || part.type === 'text')) {
+                    textParts.push(part.text);
+                }
+            }
+        }
+    }
+
+    if (textParts.length > 0) {
+        return textParts.join('\n\n').trim();
+    }
+
+    if (typeof payload?.output_text === 'string') {
+        return payload.output_text.trim();
+    }
+
+    return '';
+}
+
+function normalizeResponsesPayloadToChatShape(payload: any, model: string) {
+    const content = extractAssistantTextFromResponses(payload);
+
+    return {
+        id: payload?.id,
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: payload?.model || model,
+        choices: [
+            {
+                index: 0,
+                message: {
+                    role: 'assistant',
+                    content,
+                },
+                finish_reason: 'stop',
+            },
+        ],
+        usage: payload?.usage,
+        response_id: payload?.id,
+    };
+}
+
+function passThroughStreamResponse(upstreamResponse: Response, upstreamFormat: 'ark_responses' | 'chat_completions') {
+    const headers = new Headers(upstreamResponse.headers);
+    if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'text/event-stream; charset=utf-8');
+    }
+    headers.set('Cache-Control', 'no-store');
+    headers.set('x-llm-upstream-format', upstreamFormat);
+
+    return new Response(upstreamResponse.body, {
+        status: upstreamResponse.status,
+        headers,
+    });
+}
+
 export default async function handler(req: Request) {
     if (req.method === 'OPTIONS') {
         return optionsResponse(CHAT_DOC);
@@ -121,13 +351,16 @@ export default async function handler(req: Request) {
             );
         }
 
-        const { model, messages, max_tokens, temperature, providerBaseUrl, userApiKey, task } = body;
-        if (!Array.isArray(messages) || messages.length === 0) {
+        const { model, messages, input, max_tokens, temperature, providerBaseUrl, userApiKey, task, stream } = body;
+        const hasMessages = Array.isArray(messages) && messages.length > 0;
+        const hasInput = typeof input !== 'undefined';
+
+        if (!hasMessages && !hasInput) {
             return validationError(
                 CHAT_DOC,
                 'missing_parameter',
-                'Request body must include a non-empty messages array.',
-                'Provide messages like [{"role":"user","content":"德国心脏病怎么赢？"}].',
+                'Request body must include a non-empty messages array or a valid input payload.',
+                'Provide messages like [{"role":"user","content":"德国心脏病怎么赢？"}] or pass an Ark Responses API input field.',
                 {
                     required_fields: CHAT_DOC.requiredFields,
                 },
@@ -154,21 +387,85 @@ export default async function handler(req: Request) {
         // Read secure credentials from Vercel Environment Variables
         // Fallback to the provided key ONLY IF env is not set (for seamless migration)
         const apiKey = userApiKey || process.env.LLM_API_KEY || '8fdd5782-0a66-40b7-9a0d-88b755c4a5bc';
-        const baseUrl = providerBaseUrl || process.env.LLM_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
+        const baseUrl = providerBaseUrl || process.env.LLM_BASE_URL || ARK_BASE_URL;
+        const requestedModel = model
+            || process.env.LLM_MODEL
+            || (isArkBaseUrl(baseUrl)
+                ? (hasInput ? DEFAULT_ARK_RESPONSES_MODEL : DEFAULT_ARK_CHAT_MODEL)
+                : DEFAULT_ARK_CHAT_MODEL);
+        const shouldStream = stream === true;
+        const useResponsesApi = shouldUseResponsesApi(baseUrl, requestedModel, input);
 
-        const response = await fetch(`${baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: model || 'doubao-1-5-pro-32k-250115',
-                messages,
-                max_tokens: max_tokens || 1000,
-                temperature: resolvedTemperature
-            }),
-        });
+        const upstreamMessages = hasMessages
+            ? withDefaultDmSystemPrompt(messages as ChatMessage[])
+            : [];
+        const responseInput = hasInput
+            ? input
+            : buildResponsesInputFromMessages(upstreamMessages);
+
+        if (useResponsesApi && Array.isArray(responseInput) && responseInput.length === 0) {
+            return validationError(
+                CHAT_DOC,
+                'invalid_messages_content',
+                'messages content could not be converted into a valid Ark Responses API input.',
+                'Use string content, or pass structured input content such as input_text / input_image parts.',
+            );
+        }
+
+        const upstreamController = new AbortController();
+        const upstreamTimeout = setTimeout(() => upstreamController.abort(), UPSTREAM_TIMEOUT_MS);
+        let response: Response;
+
+        try {
+            response = await fetch(`${baseUrl}${useResponsesApi ? '/responses' : '/chat/completions'}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    ...(shouldStream ? { Accept: 'text/event-stream' } : {}),
+                },
+                signal: upstreamController.signal,
+                body: JSON.stringify(
+                    useResponsesApi
+                        ? {
+                            model: requestedModel,
+                            input: responseInput,
+                            max_output_tokens: max_tokens || DEFAULT_MAX_TOKENS,
+                            temperature: resolvedTemperature,
+                            stream: shouldStream,
+                        }
+                        : {
+                            model: requestedModel,
+                            messages: upstreamMessages,
+                            max_tokens: max_tokens || DEFAULT_MAX_TOKENS,
+                            temperature: resolvedTemperature,
+                            stream: shouldStream,
+                        },
+                ),
+            });
+        } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                return jsonResponse({
+                    error: 'Upstream LLM request timed out.',
+                    code: 'upstream_timeout',
+                    provider_base_url: baseUrl,
+                    model: requestedModel,
+                    upstream_format: useResponsesApi ? 'ark_responses' : 'chat_completions',
+                    timeout_ms: UPSTREAM_TIMEOUT_MS,
+                    hint: 'The API route is healthy, but the upstream model call did not return quickly enough.',
+                }, {
+                    status: 504,
+                    headers: {
+                        'x-llm-model': requestedModel,
+                        'x-llm-upstream-format': useResponsesApi ? 'ark_responses' : 'chat_completions',
+                    },
+                });
+            }
+
+            throw error;
+        } finally {
+            clearTimeout(upstreamTimeout);
+        }
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -176,15 +473,44 @@ export default async function handler(req: Request) {
                 error: errorText,
                 code: 'upstream_error',
                 provider_base_url: baseUrl,
+                model: requestedModel,
+                upstream_format: useResponsesApi ? 'ark_responses' : 'chat_completions',
                 hint: 'Check the upstream model name, credentials, and request shape. GET /api/chat for the local contract.',
             }, {
                 status: response.status,
+                headers: {
+                    'x-llm-model': requestedModel,
+                    'x-llm-upstream-format': useResponsesApi ? 'ark_responses' : 'chat_completions',
+                },
             });
+        }
+
+        if (shouldStream) {
+            return passThroughStreamResponse(
+                response,
+                useResponsesApi ? 'ark_responses' : 'chat_completions',
+            );
         }
 
         const data = await response.json();
 
-        return jsonResponse(data, { status: 200 });
+        if (useResponsesApi) {
+            return jsonResponse(normalizeResponsesPayloadToChatShape(data, requestedModel), {
+                status: 200,
+                headers: {
+                    'x-llm-model': requestedModel,
+                    'x-llm-upstream-format': 'ark_responses',
+                },
+            });
+        }
+
+        return jsonResponse(data, {
+            status: 200,
+            headers: {
+                'x-llm-model': requestedModel,
+                'x-llm-upstream-format': 'chat_completions',
+            },
+        });
 
     } catch (error: any) {
         return jsonResponse({

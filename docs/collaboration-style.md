@@ -4,7 +4,7 @@ This document is a living summary of how we work together on this project.
 It captures stable preferences that have shown up through real collaboration,
 so future agents can move faster with fewer unnecessary confirmations.
 
-Last updated: 2026-03-23
+Last updated: 2026-05-13
 
 ## Purpose
 
@@ -83,6 +83,15 @@ Interrupt immediately and wait for a reply only if one of these is true:
 - There are multiple plausible paths with materially different long-term costs.
 - The available paths reflect a real engineering-aesthetic conflict where either path is executable, but the preferred choice depends on the user's judgment.
 - The decision will contaminate multiple downstream modules if chosen badly.
+
+### Release Discipline
+
+- Do not push code to the online / production-facing branch before the `release` branch has been updated and verified.
+- Treat `release` as the mandatory verification gate for user-journey changes, especially when the change affects recommendation quality, referee behavior, streaming, TTS, or deployment wiring.
+- The safe order is:
+  working branch -> `release` branch validation -> preview verification -> production promotion.
+- If the `release` branch has not yet passed verification, do not "just push it online first" for convenience.
+- The only acceptable exception is an explicit stop-bleeding rollback or emergency action the user directly asks for.
 
 The standard is:
 

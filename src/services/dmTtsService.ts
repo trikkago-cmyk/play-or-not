@@ -67,15 +67,11 @@ function shouldAllowBrowserSpeechFallback(): boolean {
   }
 
   try {
-    if (window.localStorage.getItem(BROWSER_SPEECH_FALLBACK_STORAGE_KEY) === 'true') {
-      return true;
-    }
+    return window.localStorage.getItem(BROWSER_SPEECH_FALLBACK_STORAGE_KEY) === 'true';
   } catch {
-    // Ignore storage failures and keep the runtime path working.
+    // If storage is unavailable, keep browser fallback disabled.
+    return false;
   }
-
-  const host = window.location.hostname.trim().toLowerCase();
-  return host === '' || host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
 }
 
 export function isDmTtsSupported(): boolean {

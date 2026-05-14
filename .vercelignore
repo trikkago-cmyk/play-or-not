@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.venv
+.vercel
+rag/.chroma
+rag/.cache
+rag_evals/reports
+tts_service/evals
+.agent
+.agents
+.learnings
+memory
+*.log

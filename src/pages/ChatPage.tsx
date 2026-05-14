@@ -25,6 +25,11 @@ interface ChatPageProps {
   onRefereeModeEntered?: () => void;
 }
 
+type AssistantRevealState = {
+  isComplete: boolean;
+  visibleLength: number;
+};
+
 const INITIAL_MESSAGE = '嘿！我是你的桌游DM。\n今天几个人？想玩点什么感觉的？';
 // 场景标签
 const scenarioTags = [
@@ -61,10 +66,11 @@ export default function ChatPage({
   const [isTyping, setIsTyping] = useState(false);
   const [changeCount, setChangeCount] = useState(0); // Track "换一个" clicks
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isAwaitingAssistantOutput, setIsAwaitingAssistantOutput] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [useLLM, setUseLLM] = useState(!isMockMode());
   const [apiKey, setApiKey] = useState('');
-  const [provider, setProvider] = useState('deepseek');
+  const [provider, setProvider] = useState('volcengine');
   const [ttsEnabled, setTtsEnabled] = useState(() => getDmTtsEnabled());
   const [ttsSupported] = useState(() => isDmTtsSupported());
   const [ttsReplayNonce, setTtsReplayNonce] = useState(0);
@@ -97,8 +103,11 @@ export default function ChatPage({
     new Set((initialMessages || []).filter((message) => message.role === 'assistant').map((message) => message.id)),
   );
   const speakingAssistantMessageIdsRef = useRef<Set<string>>(new Set());
+  const revealIntervalIdsRef = useRef<Record<string, number>>({});
 
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || []);
+  const [assistantRevealStates, setAssistantRevealStates] = useState<Record<string, AssistantRevealState>>({});
+  const [assistantRevealTick, setAssistantRevealTick] = useState(0);
 
   // 初始化LLM配置
   useEffect(() => {
@@ -230,13 +239,100 @@ export default function ChatPage({
     }
   }, [targetRefereeGameId, onRefereeModeEntered]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages, displayedText]);
+
+  useEffect(() => {
+    if (assistantRevealTick === 0) {
+      return;
+    }
+
+    scrollToBottom('auto');
+  }, [assistantRevealTick]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(revealIntervalIdsRef.current).forEach((intervalId) => {
+        window.clearInterval(intervalId);
+      });
+      revealIntervalIdsRef.current = {};
+    };
+  }, []);
+
+  const clearAssistantRevealInterval = (messageId: string) => {
+    const intervalId = revealIntervalIdsRef.current[messageId];
+    if (typeof intervalId === 'number') {
+      window.clearInterval(intervalId);
+      delete revealIntervalIdsRef.current[messageId];
+    }
+  };
+
+  const getAssistantRevealStep = (content: string) => {
+    if (content.length >= 240) {
+      return 8;
+    }
+    if (content.length >= 160) {
+      return 6;
+    }
+    if (content.length >= 100) {
+      return 5;
+    }
+    return 4;
+  };
+
+  const startAssistantReveal = (message: ChatMessage) => {
+    if (!message.gameCard || !message.content.trim()) {
+      return;
+    }
+
+    clearAssistantRevealInterval(message.id);
+
+    const fullLength = message.content.length;
+    const revealStep = getAssistantRevealStep(message.content);
+    let visibleLength = 0;
+
+    setAssistantRevealStates((prev) => ({
+      ...prev,
+      [message.id]: {
+        isComplete: false,
+        visibleLength: 0,
+      },
+    }));
+
+    revealIntervalIdsRef.current[message.id] = window.setInterval(() => {
+      visibleLength = Math.min(fullLength, visibleLength + revealStep);
+      const isComplete = visibleLength >= fullLength;
+
+      setAssistantRevealStates((prev) => ({
+        ...prev,
+        [message.id]: {
+          isComplete,
+          visibleLength,
+        },
+      }));
+
+      if (isComplete) {
+        clearAssistantRevealInterval(message.id);
+        return;
+      }
+
+      setAssistantRevealTick((prev) => prev + 1);
+    }, 26);
+  };
+
+  const appendAssistantMessage = (message: ChatMessage) => {
+    setMessages((prev) => [...prev, message]);
+    startAssistantReveal(message);
+  };
+
+  const updateAssistantMessage = (messageId: string, updater: (message: ChatMessage) => ChatMessage) => {
+    setMessages((prev) => prev.map((message) => (message.id === messageId ? updater(message) : message)));
+  };
 
   useEffect(() => {
     if (!ttsSupported || !ttsEnabled) {
@@ -245,6 +341,8 @@ export default function ChatPage({
 
     const latestAssistantMessage = [...messages].reverse().find(
       (message) => message.role === 'assistant'
+        && !message.isStreaming
+        && message.content.trim().length > 0
         && !spokenAssistantMessageIdsRef.current.has(message.id)
         && !speakingAssistantMessageIdsRef.current.has(message.id),
     );
@@ -262,6 +360,102 @@ export default function ChatPage({
       }
     });
   }, [messages, ttsEnabled, ttsSupported, ttsReplayNonce]);
+
+  const runDialogueTurn = async ({
+    userVisibleText,
+    llmQuery,
+    turnMode,
+    refereeGame,
+    isRefereeMessage = false,
+  }: {
+    userVisibleText: string;
+    llmQuery: string;
+    turnMode: 'recommendation' | 'referee';
+    refereeGame?: Game;
+    isRefereeMessage?: boolean;
+  }) => {
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: userVisibleText,
+      timestamp: Date.now(),
+    };
+    const assistantId = `${Date.now() + 1}`;
+    const assistantPlaceholder: ChatMessage = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      isStreaming: true,
+      isRefereeMessage,
+    };
+    let hasInsertedAssistantMessage = false;
+
+    setMessages((prev) => [...prev, userMessage]);
+    setIsProcessing(true);
+    setIsAwaitingAssistantOutput(true);
+
+    try {
+      const result = await dialogueAgent.processInputStream(llmQuery, turnMode, refereeGame, {
+        onAnswerUpdate: (partialText) => {
+          if (!partialText.trim()) {
+            return;
+          }
+
+          if (!hasInsertedAssistantMessage) {
+            hasInsertedAssistantMessage = true;
+            setMessages((prev) => [
+              ...prev,
+              {
+                ...assistantPlaceholder,
+                content: partialText,
+              },
+            ]);
+          } else {
+            updateAssistantMessage(assistantId, (message) => ({
+              ...message,
+              content: partialText,
+              isStreaming: true,
+            }));
+          }
+
+          setIsAwaitingAssistantOutput(false);
+        },
+      });
+
+      if (!hasInsertedAssistantMessage) {
+        hasInsertedAssistantMessage = true;
+        setMessages((prev) => [
+          ...prev,
+          {
+            ...assistantPlaceholder,
+            content: result.answer,
+            isStreaming: false,
+            gameCard: turnMode === 'recommendation' && result.games.length > 0 ? result.games[0] : undefined,
+          },
+        ]);
+      } else {
+        updateAssistantMessage(assistantId, (message) => ({
+          ...message,
+          content: result.answer,
+          isStreaming: false,
+          gameCard: turnMode === 'recommendation' && result.games.length > 0 ? result.games[0] : undefined,
+          isRefereeMessage,
+        }));
+      }
+
+      setIsAwaitingAssistantOutput(false);
+
+      if (result.switchMode) {
+        exitRefereeMode();
+      }
+
+      return result;
+    } finally {
+      setIsProcessing(false);
+      setIsAwaitingAssistantOutput(false);
+    }
+  };
 
   // 进入裁判模式
   const enterRefereeMode = (game: Game) => {
@@ -297,26 +491,11 @@ export default function ChatPage({
 
   // 处理场景标签点击
   const handleScenarioClick = async (scenario: string) => {
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: scenario,
-      timestamp: Date.now(),
-    };
-    setMessages(prev => [...prev, userMessage]);
-    setIsProcessing(true);
-
-    const result = await dialogueAgent.processInput(`${scenario} 推荐游戏`, 'recommendation');
-
-    const aiMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: result.answer,
-      timestamp: Date.now(),
-      gameCard: result.games[0],
-    };
-    setMessages(prev => [...prev, aiMessage]);
-    setIsProcessing(false);
+    await runDialogueTurn({
+      userVisibleText: scenario,
+      llmQuery: `${scenario} 推荐游戏`,
+      turnMode: 'recommendation',
+    });
   };
 
   // 处理裁判模式快捷问题点击
@@ -329,26 +508,13 @@ export default function ChatPage({
 
     if (!activeGame) return;
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: question,
-      timestamp: Date.now(),
-    };
-    setMessages(prev => [...prev, userMessage]);
-    setIsProcessing(true);
-
-    const result = await dialogueAgent.processInput(question, 'referee', activeGame);
-
-    const aiMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: result.answer,
-      timestamp: Date.now(),
+    await runDialogueTurn({
+      userVisibleText: question,
+      llmQuery: question,
+      turnMode: 'referee',
+      refereeGame: activeGame,
       isRefereeMessage: true,
-    };
-    setMessages(prev => [...prev, aiMessage]);
-    setIsProcessing(false);
+    });
   };
 
   // --- Voice Input Logic (Backend STT via MediaRecorder) ---
@@ -683,58 +849,31 @@ export default function ChatPage({
   const handleSend = async (forcedText?: string) => {
     const textToSend = forcedText || inputValue;
     if (!textToSend.trim() || isProcessing) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: textToSend,
-      timestamp: Date.now(),
-    };
-    setMessages(prev => [...prev, userMessage]);
     if (!forcedText) {
       setInputValue('');
     }
-    setIsProcessing(true);
-
-    let result;
 
     if (mode === 'referee' && activeGame) {
       // 用户明确输入了退出指令
-      if (userMessage.content.trim() === '退出裁判模式' || userMessage.content.trim() === '退出') {
+      if (textToSend.trim() === '退出裁判模式' || textToSend.trim() === '退出') {
         exitRefereeMode();
-        setIsProcessing(false);
         return;
       }
 
-      result = await dialogueAgent.processInput(userMessage.content, 'referee', activeGame);
-
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: result.answer,
-        timestamp: Date.now(),
+      await runDialogueTurn({
+        userVisibleText: textToSend,
+        llmQuery: textToSend,
+        turnMode: 'referee',
+        refereeGame: activeGame,
         isRefereeMessage: true,
-      };
-      setMessages(prev => [...prev, aiMessage]);
-
-      if (result.switchMode) {
-        exitRefereeMode();
-      }
+      });
     } else {
-      // 推荐模式
-      result = await dialogueAgent.processInput(userMessage.content, 'recommendation');
-
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: result.answer,
-        timestamp: Date.now(),
-        gameCard: result.games && result.games.length > 0 ? result.games[0] : undefined,
-      };
-      setMessages(prev => [...prev, aiMessage]);
+      await runDialogueTurn({
+        userVisibleText: textToSend,
+        llmQuery: textToSend,
+        turnMode: 'recommendation',
+      });
     }
-
-    setIsProcessing(false);
   };
 
   // "换一个" - 在对话流中新增一个推荐
@@ -756,20 +895,13 @@ export default function ChatPage({
       // Pick random one from the candidates to simulate variety
       const newGame = similarGames[Math.floor(Math.random() * similarGames.length)];
 
-      setIsProcessing(true);
-      const result = await dialogueAgent.processInput(`换一个，类似${newGame.titleCn}`, 'recommendation');
-
-      const aiMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: result.answer,
-        timestamp: Date.now(),
-        gameCard: result.games && result.games.length > 0 ? result.games[0] : newGame,
-      };
-      setMessages(prev => [...prev, aiMessage]);
+      await runDialogueTurn({
+        userVisibleText: '换一个',
+        llmQuery: `换一个，类似${newGame.titleCn}`,
+        turnMode: 'recommendation',
+      });
       // Increment change count - show batch button after 2 changes
       setChangeCount(prev => prev + 1);
-      setIsProcessing(false);
     } else {
       const aiMessage: ChatMessage = {
         id: Date.now().toString(),
@@ -777,7 +909,7 @@ export default function ChatPage({
         content: '游戏库里的游戏都推荐一遍啦！\n\n要不我们重置会话，重新聊聊？',
         timestamp: Date.now(),
       };
-      setMessages(prev => [...prev, aiMessage]);
+      appendAssistantMessage(aiMessage);
     }
   };
 
@@ -908,6 +1040,14 @@ export default function ChatPage({
     }
 
     if (message.role === 'assistant') {
+      const revealState = assistantRevealStates[message.id];
+      const isStreamingAssistant = message.isStreaming === true;
+      const isRevealingRecommendation = Boolean(message.gameCard && revealState && !revealState.isComplete);
+      const visibleAssistantContent = isRevealingRecommendation
+        ? message.content.slice(0, revealState.visibleLength)
+        : message.content;
+      const shouldShowGameCard = Boolean(message.gameCard && (!revealState || revealState.isComplete));
+
       return (
         <div key={message.id} className="animate-fade-in">
           <div className="flex gap-2">
@@ -923,14 +1063,20 @@ export default function ChatPage({
                   relative max-w-[85%] p-4 rounded-2xl text-sm font-medium leading-relaxed
                   bg-white text-gray-800 rounded-tl-none border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]
                 `}>
-                <MarkdownText content={message.content} />
+                {isStreamingAssistant ? (
+                  <MarkdownText content={message.content} className="min-h-[1.5em]" showCursor />
+                ) : isRevealingRecommendation ? (
+                  <MarkdownText content={visibleAssistantContent} className="min-h-[1.5em]" showCursor />
+                ) : (
+                  <MarkdownText content={message.content} />
+                )}
               </div>
 
               {/* Game Card */}
-              {message.gameCard && (
+              {shouldShowGameCard && (
                 <div className="mt-3 -ml-10">
                   <GameCard
-                    game={message.gameCard}
+                    game={message.gameCard!}
                     onPlayThis={() => handlePlayThis(message.gameCard!.id)}
                     onChange={handleChangeGame}
                   />
@@ -953,7 +1099,7 @@ export default function ChatPage({
               )}
 
               {/* In the last message, show "换一批" button after 2 changes */}
-              {idx === lastMessageIndex && changeCount >= 2 && !message.batchCards && mode === 'recommendation' && (
+              {idx === lastMessageIndex && changeCount >= 2 && !message.batchCards && mode === 'recommendation' && !isRevealingRecommendation && (
                 <Button
                   onClick={handleNextBatch}
                   disabled={isProcessing || isTranscribing}
@@ -1138,7 +1284,7 @@ export default function ChatPage({
         {messages.map((message, idx) => renderMessage(message, idx))}
 
         {/* Processing Indicator */}
-        {isProcessing && (
+        {isAwaitingAssistantOutput && (
           <div className="flex gap-2 animate-fade-in">
             <div className="w-8 h-8 rounded-lg overflow-hidden border-2 border-black flex-shrink-0 bg-black">
               <img

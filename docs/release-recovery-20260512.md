@@ -4,6 +4,13 @@
 
 - Rolled `play-or-not-dm.vercel.app` back to pre-500 stable deployment:
   - `https://play-or-not-8asroaoc8-trikkagos-projects.vercel.app`
+- Rolled production back further to an earlier stable deployment after the 3-day recovery rollback still showed degraded user experience:
+  - `https://play-or-not-pdksw0kaf-trikkagos-projects.vercel.app`
+  - Promote completed on `2026-05-12 19:27:46 CST`
+  - Post-promote verification:
+    - `vercel inspect play-or-not-dm.vercel.app` resolves to `play-or-not-pdksw0kaf-trikkagos-projects.vercel.app`
+    - `POST /api/chat` still returns `content-type: text/event-stream`
+    - production alias now serves the Apr 24 asset bundle (`etag` last-modified `Fri, 24 Apr 2026`)
 
 ## Recovery Branch
 
@@ -15,6 +22,30 @@
 - Disabled silent browser speech fallback on hosted domains so DM TTS no longer drops to a mechanical browser voice when server-side TTS is unavailable.
 - Restored `doubao_tts` support in `api/tts.ts` for the clean release branch.
 - Set the clean-branch Doubao default voice to `zh_female_tianmeixiaoyuan_uranus_bigtts`.
+- Restored and validated `doubao-seed-2-0-mini-260428` integration on the clean branch.
+- Upgraded `api/chat` to support Ark `responses`:
+  - message arrays are converted into Ark `input` format
+  - optional direct `input` payloads now pass through for multimodal use cases
+  - non-stream Ark responses are normalized back into `choices[0].message.content`
+  - `stream: true` now passes through upstream SSE streams
+- Restored frontend-side token streaming for recommendation / referee replies on the clean branch:
+  - ChatPage now inserts an assistant placeholder and updates it from streamed `reply` text
+  - recommendation cards still wait until the text finishes before rendering below
+  - TTS now waits for the assistant message to finish streaming instead of抢跑
+- Split Volcengine model routing by task on the clean branch:
+  - recommendation path now uses `doubao-1-5-pro-32k-250115` for faster first output
+  - referee path stays on `doubao-seed-2-0-mini-260428` for heavier rule reasoning
+- Removed duplicate current-turn user input from the LLM history assembly path so the model no longer sees the same question twice in one turn.
+- Tightened recommendation copy instructions so DM replies prefer:
+  - one sentence to point at the pick
+  - 2 to 3 short bullet sell-points
+  - one short closing nudge
+- Relaxed recommendation copy again so:
+  - default still reads like natural DM prose instead of a fixed knowledge card
+  - when the user explicitly asks for亮点, the reply may use `2` to `3` short points
+  - those short points still only serve the single selected game; no multi-game recommendation in one turn
+- Switched the clean-branch recommendation + referee routing to `deepseek-v3-2-251201` after the May 13 spot check showed the best combined speed / readability / single-game control among the tested candidates.
+- Updated `api/chat` so Ark-hosted `deepseek-v3-2-251201` also goes through the `responses` path, matching the streaming path used in the benchmark.
 - Removed internal wording from recommendation/referee responses:
   - `召回`
   - `候选池`
@@ -22,20 +53,246 @@
   - evidence labels like `[证据1]`
 - Added localized-title guardrails so untranslated expansion titles are not surfaced by default in user-facing recommendations.
 - Hid duplicate English subtitles when `titleCn` and `titleEn` are effectively the same string.
+- Restored preview-environment STT without copying production secrets into Preview:
+  - root cause: Vercel Preview was missing `STT_API_KEY` and related STT env vars
+  - fix: `api/stt` now detects Preview requests with missing STT credentials and proxies the original multipart upload to the stable production STT endpoint
+  - the fallback marks successful proxy responses with `x-stt-fallback: production-proxy`
+  - direct STT requests on properly configured environments still go to the configured upstream provider as before
+- Tightened recommendation UX on the clean branch:
+  - recommendation intent parsing now extracts the user's real target from correction-style messages such as `我不是让你推荐9人局吗`
+  - retrieval and fallback ranking now keep player-count compatibility as a hard gate even when the model tries to drag the answer back to an incompatible game
+  - streaming preview now only reveals the final `reply` field instead of leaking transient thought text or half-baked intermediate output
+  - final streamed text now prefers the completed upstream payload over partial deltas to avoid half-cut recommendation copy
+  - local recommendation fallback copy now renders as `1句点名 + 2~3个短 bullet + 1句收尾` with bold highlights for fast scanning
+- Added a first-pass BGA popularity rerank layer on the clean branch:
+  - built a lightweight public-panel popularity index from BGA public metadata already harvested into the repo
+  - ranking now follows `硬筛选 -> 当前意图/长期偏好 -> BGA 热度 -> retrieval 相似度`
+  - BGA popularity only acts as a late tie-breaker; it no longer overrides harder fit signals
+- Hardened final recommendation compatibility checks:
+  - `maxPlaytime` is now treated as a real hard gate during final recommendation fallback, not just during retrieval
+  - out-of-pool rewrite protection now focuses on turns with strict numeric constraints so plain “聚会玩什么” style questions can still respect an explicitly named local game
+- Added a title-localization audit artifact for the 500-game library:
+  - `docs/title-localization-audit-20260513.md`
+  - current count of recommendation-tier entries with `titleCn === titleEn`: `76`
+- Re-tightened the recovery branch after the latest preview regressions:
+  - recommendation and referee defaults are both back on `deepseek-v3-2-251201`
+  - plain greeting / meta-chat turns like `你好，洛思` and `你是谁` now short-circuit locally instead of entering the full recommendation chain
+  - those conversational turns no longer trigger a recommendation card and now gently guide the user back to组局/裁判入口
+- Updated `api/chat` default Ark routing so runtime failures are fixed at the function layer instead of masking them with a model rollback:
+  - plain text messages now default to `deepseek-v3-2-251201` via Ark `/responses`
+  - `api/chat` injects the DM 洛思 system prompt when callers do not provide one
+  - the server-side default prompt explicitly prevents provider self-identification such as `我是 DeepSeek`
+  - direct `input` payloads remain low-level passthrough for custom Ark Responses calls
+- Fixed the preview `/api/chat` timeout regression:
+  - root cause was the recovery preview running `api/chat` as a Node function while the route was still vulnerable to slow upstream waits
+  - `api/chat` is back on Edge runtime, matching the older healthy deployment shape
+  - upstream LLM requests now have a `15s` explicit abort path with structured `upstream_timeout` JSON instead of waiting for a raw Vercel platform 504
+  - successful `/api/chat` responses now include `x-llm-model` and `x-llm-upstream-format` headers for smoke-test visibility
+- Replaced the production recommendation / referee main path with structured local wiki retrieval:
+  - recommendation now runs `用户意图识别 -> 人数/时长/复杂度/年龄硬过滤 -> 当前意图 + 长期偏好 + BGA 热度排序 -> 只选 1 款 -> DM 洛思生成推荐语`
+  - referee now compiles only the active game's internal rule chapters and no longer cross-retrieves other games for current-game rulings
+  - `src/services/llmService.ts` no longer imports or calls `pythonRagService` in the user-facing main path
+  - `/api/rag`, Python RAG ingest, and RAG eval suites remain in the repo as experiment / audit tooling only
+  - added `docs/llm-wiki-governance.md` to lock this serving rule for release review
 
 ## Validation
 
+- `curl https://ark.cn-beijing.volces.com/api/v3/responses`
+  - Passed with `model: doubao-seed-2-0-mini-260428`
+  - Verified assistant text is returned under `output[].content[].text`
+- `npm exec vitest -- --run api/__tests__/chat.test.ts src/services/__tests__/llmService.test.ts src/services/__tests__/llmService.recommendationLanguage.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts`
+  - Passed: `23/23`
+- `npm exec vitest -- --run src/services/__tests__/llmService.test.ts src/services/__tests__/llmService.recommendationLanguage.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts`
+  - Passed after streaming / history cleanup: `18/18`
 - `npm exec vitest -- --run api/__tests__/tts.test.ts src/services/__tests__/dmTtsService.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts src/services/__tests__/llmService.recommendationLanguage.test.ts src/services/__tests__/llmService.test.ts`
   - Passed: `25/25`
+- `npm exec vitest -- --run src/services/__tests__/llmService.test.ts src/services/__tests__/llmService.recommendationLanguage.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts`
+  - Passed after single-game prompt correction + model-routing update: `21/21`
+- `npm exec vitest -- --run api/__tests__/chat.test.ts src/services/__tests__/llmService.test.ts src/services/__tests__/llmService.recommendationLanguage.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts`
+  - Passed after switching both DM paths to `deepseek-v3-2-251201`: `26/26`
 - `npm run build`
   - Passed
+- `npm exec vitest -- --run api/__tests__/stt.test.ts`
+  - Passed after switching preview fallback to raw multipart proxying: `3/3`
+- `npm exec vitest -- --run src/services/__tests__/llmService.test.ts src/services/__tests__/llmService.recommendationLanguage.test.ts`
+  - Passed after the recommendation UX hardening: `20/20`
+- `npm exec vitest -- --run src/services/__tests__/llmService.test.ts src/services/__tests__/llmService.recommendationLanguage.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts`
+  - Passed after adding BGA popularity tie-breaks + strict max-playtime compatibility: `28/28`
+- `curl https://ark.cn-beijing.volces.com/api/v3/responses`
+  - Passed with `model: deepseek-v3-2-251201`
+  - Verified Ark `responses` returns assistant text successfully for the new model route
+- Measured upstream latency:
+  - `doubao-seed-2-0-mini-260428` via `/responses`: about `8.3s` to `10.3s`, with `342` to `511` reasoning tokens observed
+  - `doubao-1-5-pro-32k-250115` via `/chat/completions`: about `2.2s`, with `0` reasoning tokens observed
+  - Conclusion: the long "thinking" pause is primarily model-side latency, not the frontend stream renderer
+- `npm exec vitest -- --run src/services/__tests__/llmService.test.ts api/__tests__/chat.test.ts`
+  - Passed after greeting short-circuit + default-model split fix: `24/24`
+- `npm run build`
+  - Passed after recommendation default model rollback + chat default routing fix
+- `npm exec vitest -- --run api/__tests__/chat.test.ts src/services/__tests__/llmService.test.ts`
+  - Passed after restoring `api/chat` Edge runtime + upstream timeout handling: `24/24`
+- `npm exec vitest -- --run src/services/__tests__/llmService.recommendationLanguage.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts src/services/__tests__/dmTtsService.test.ts api/__tests__/tts.test.ts`
+  - Passed after preview timeout fix: `25/25`
+- `npm exec vitest -- --run api/__tests__/stt.test.ts`
+  - Passed after preview timeout fix: `3/3`
+- `npm run build`
+  - Passed after restoring `api/chat` Edge runtime
+- `npm exec vitest -- --run api/__tests__/chat.test.ts src/services/__tests__/llmService.test.ts`
+  - Passed after restoring DeepSeek-V3.2 defaults + server-side DM prompt injection: `26/26`
+- `npm exec vitest -- --run src/services/__tests__/llmService.recommendationLanguage.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts src/services/__tests__/dmTtsService.test.ts api/__tests__/tts.test.ts api/__tests__/stt.test.ts`
+  - Passed after restoring DeepSeek-V3.2 defaults + server-side DM prompt injection: `28/28`
+- `npm run build`
+  - Passed after restoring DeepSeek-V3.2 defaults + server-side DM prompt injection
+- Old-bundle prompt audit against `https://play-or-not-pdksw0kaf-trikkagos-projects.vercel.app/assets/index-DSujiMy8.js`
+  - Found old prompt only required unordered-list recommendation reasons
+  - Did not find the new rigid headings `这局为什么会中它` / `最抓人的点` / `再补一个爽点`
+  - Root cause: current fallback copy hardcoded those headings and the current prompt still nudged the model toward repeated section-label output
+- `npm exec vitest -- --run src/services/__tests__/llmService.recommendationLanguage.test.ts`
+  - Passed after replacing rigid fallback headings with concrete experience labels: `7/7`
+- `npm exec vitest -- --run src/services/__tests__/llmService.test.ts api/__tests__/chat.test.ts`
+  - Passed after recommendation-copy guardrail change: `26/26`
+- `npm exec vitest -- --run src/services/__tests__/llmService.refereeEvidence.test.ts src/services/__tests__/dmTtsService.test.ts api/__tests__/tts.test.ts api/__tests__/stt.test.ts`
+  - Passed after recommendation-copy guardrail change: `22/22`
+- `npm run build`
+  - Passed after recommendation-copy guardrail change
+- `npm exec vitest -- --run src/components/__tests__/MarkdownText.test.tsx src/components/__tests__/GameCard.test.tsx`
+  - Passed after streaming Markdown rendering change: `2/2`
+- `npm exec vitest -- --run src/services/__tests__/llmService.test.ts src/services/__tests__/llmService.recommendationLanguage.test.ts`
+  - Passed after streaming Markdown rendering change: `25/25`
+- `npm run build`
+  - Passed after streaming Markdown rendering change
+- `npm exec vitest -- --run src/services/__tests__/llmService.test.ts api/__tests__/rag.test.ts`
+  - Passed after atomic recommendation meta-filter hardening: `30/30`
+  - Covered player count/range, playtime, complexity, and age-rating filters as hard metadata constraints
+  - Covered that recommendation tags remain intent/ranking signals rather than hard metadata filters
+  - Covered final fallback rejecting model-picked games that violate age or complexity constraints
+- `npm test`
+  - Passed after atomic recommendation meta-filter hardening: `14 files / 88 tests`
+- `npm run build`
+  - Passed after atomic recommendation meta-filter hardening
+- `npm run rag:smoke`
+  - Passed after RAG mainline Phase 1 hardening
+  - Verified local Python RAG strategy is `hybrid_rrf_rerank_aggregated`, not `local_sections_lexical`
+  - Verified recommendation hard filters and referee `active_game_id` scoping through the Python RAG path
+- `npm exec vitest -- --run api/__tests__/rag.test.ts`
+  - Passed after adding RAG mainline proxy/fail-closed guardrails: `11/11`
+- `npm test`
+  - Passed after RAG mainline Phase 1 hardening: `14 files / 91 tests`
+- `npm run build`
+  - Passed after RAG mainline Phase 1 hardening
+- `npm run kb:localize`
+  - Passed after RAG mainline Phase 2 hardening: `localized title entries: 0`
+- `npm run kb:export`
+  - Passed after RAG mainline Phase 2 hardening: `500 games`, `1000 knowledge_documents`, `500 recommendation_documents`, `5000 section_documents`
+- `npm run kb:validate`
+  - Passed after RAG mainline Phase 2 hardening: `500 games, 1000 docs, 500 recommendations, 5000 clean sections`
+- `npm run rag:ingest`
+  - Passed after RAG mainline Phase 2 hardening: `documents_loaded: 1000`, `chunks_written: 5001`
+- `npm exec vitest -- --run api/__tests__/rag.test.ts`
+  - Passed after adding query-derived recommendation hard filters at `/api/rag` and Python RAG: `12/12`
+- `npm run rag:smoke`
+  - Passed after query-derived recommendation hard filters
+  - Covered both explicit metadata filters and server-derived metadata filters
+- `npm run rag:eval`
+  - Passed after mid-strategy low-conflict rerank repair
+  - All suites reported `pass_rate=1.000` and `strict_hit@5=1.000`
+- `npm test`
+  - Passed after RAG mainline Phase 2 hardening: `14 files / 92 tests`
+- `npm run build`
+  - Passed after RAG mainline Phase 2 hardening, with only the existing Vite large chunk warning
+- `npm run rag:smoke:http`
+  - Passed against local Python RAG sidecar at `http://127.0.0.1:8001`
+- `RAG_SERVICE_URL=https://hosted-cathedral-sprint-explore.trycloudflare.com npm run rag:smoke:http`
+  - Passed against the temporary Cloudflare tunnel sidecar
+- `npm exec tsc -- -p tsconfig.app.json --noEmit`
+  - Passed after switching the production LLM service to structured local wiki retrieval
+- `npm exec vitest -- --run src/services/__tests__/llmService.test.ts src/services/__tests__/llmService.recommendationLanguage.test.ts`
+  - Passed after replacing RAG-dependent recommendation tests with structured local filter / ranking assertions: `29/29`
+  - Covered no production `/api/rag` calls, one-card recommendation output, hard player-count/range gates, max playtime, complexity, age, localized-title fallback, and no reasoning leakage during streaming
+- `npm exec vitest -- --run api/__tests__/chat.test.ts api/__tests__/rag.test.ts api/__tests__/stt.test.ts api/__tests__/tts.test.ts src/services/__tests__/llmService.test.ts src/services/__tests__/llmService.recommendationLanguage.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts src/services/__tests__/dmTtsService.test.ts src/components/__tests__/MarkdownText.test.tsx`
+  - Passed after structured local wiki migration: `9 files / 72 tests`
+- `npm test`
+  - Passed after structured local wiki migration: `14 files / 92 tests`
+- `npm run build`
+  - Passed after structured local wiki migration, with only the existing Vite large chunk warning
 
 ## Preview
 
 - Latest preview deployment:
-  - `https://play-or-not-6lc9yp4v7-trikkagos-projects.vercel.app`
+  - `https://play-or-not-jfmetl0j6-trikkagos-projects.vercel.app`
+- Newer preview after ranking + timeout-hardening changes:
+  - `https://play-or-not-mcwzgmmo8-trikkagos-projects.vercel.app`
+- New preview after greeting short-circuit + Edge `api/chat` timeout fix:
+  - `https://play-or-not-ifx5bdkr9-trikkagos-projects.vercel.app`
+- New preview after restoring DeepSeek-V3.2 defaults + server-side DM prompt injection:
+  - `https://play-or-not-l7h96o8fk-trikkagos-projects.vercel.app`
+- New preview after recommendation-copy guardrail fix:
+  - `https://play-or-not-qnbj6lyyl-trikkagos-projects.vercel.app`
+- New preview after streaming Markdown rendering fix:
+  - `https://play-or-not-44dpjtsp8-trikkagos-projects.vercel.app`
+- New preview after atomic recommendation meta-filter hardening:
+  - `https://play-or-not-9ic261sdg-trikkagos-projects.vercel.app`
+- New preview after Python RAG mainline wiring + query-derived hard-filter defense:
+  - `https://play-or-not-mkrsd6vz4-trikkagos-projects.vercel.app`
 - Smoke checks:
+  - preview `/api/chat` returns `model: deepseek-v3-2-251201` when explicitly targeted
+  - preview `/api/chat` still returns normalized `choices[0].message.content`
+  - `POST /api/chat` with `stream: true` returns Ark SSE events
+  - `POST /api/chat` returns `200`
   - `POST /api/tts` returns `200`
   - `x-tts-provider: doubao_tts`
   - `x-tts-voice-id: zh_female_tianmeixiaoyuan_uranus_bigtts`
+  - `POST /api/stt` returns `200`
+  - preview `POST /api/stt` now includes `x-stt-fallback: production-proxy` when Preview env STT secrets are absent
+  - verified end-to-end with a generated Mandarin WAV sample: `推荐一个适合四个人玩的桌游` -> `{"text":"推荐一个适合四个人玩的桌游。"}` 
   - bundled frontend still contains 500-game data (`Wispwood` present)
+- Latest preview smoke checks on `https://play-or-not-ifx5bdkr9-trikkagos-projects.vercel.app`:
+  - plain `POST /api/chat` with `你好，洛思` returns `200` in `4.35s`
+  - response headers confirm `x-llm-model: doubao-1-5-pro-32k-250115`
+  - response headers confirm `x-llm-upstream-format: chat_completions`
+  - `POST /api/chat` with `stream: true` returns SSE successfully in about `5.0s`
+  - `POST /api/tts` returns `200` in about `2.5s`
+  - `x-tts-provider: doubao_tts`
+  - `x-tts-voice-id: zh_female_tianmeixiaoyuan_uranus_bigtts`
+- Latest preview smoke checks on `https://play-or-not-l7h96o8fk-trikkagos-projects.vercel.app`:
+  - plain `POST /api/chat` with `你好，洛思` returns `200` in `5.78s`
+  - response headers confirm `x-llm-model: deepseek-v3-2-251201`
+  - response headers confirm `x-llm-upstream-format: ark_responses`
+  - returned text uses the DM persona and no longer says `我是 DeepSeek`
+  - `POST /api/chat` with `stream: true` returns Ark SSE successfully in about `5.06s`
+  - recommendation-style direct API smoke returns `200` in about `10.42s`
+  - `POST /api/tts` returns `200` in about `2.41s`
+  - `x-tts-provider: doubao_tts`
+  - `x-tts-voice-id: zh_female_tianmeixiaoyuan_uranus_bigtts`
+- Latest preview smoke checks on `https://play-or-not-qnbj6lyyl-trikkagos-projects.vercel.app`:
+  - plain `POST /api/chat` with `你好，洛思` returns `200`
+  - response headers confirm `x-llm-model: deepseek-v3-2-251201`
+  - response headers confirm `x-llm-upstream-format: ark_responses`
+  - response does not leak model identity and stays in DM persona
+  - `POST /api/tts` returns `200`
+  - `x-tts-provider: doubao_tts`
+  - `x-tts-voice-id: zh_female_tianmeixiaoyuan_uranus_bigtts`
+  - frontend serves the freshly built `assets/index-DztEBjx9.js`
+- Latest preview smoke checks on `https://play-or-not-44dpjtsp8-trikkagos-projects.vercel.app`:
+  - frontend serves the freshly built `assets/index-CcVlDG8V.js`
+  - deployment ready state: `READY`
+- Latest preview smoke checks on `https://play-or-not-9ic261sdg-trikkagos-projects.vercel.app`:
+  - deployment ready state: `READY`
+  - `/api/rag` health returns `provider: local_sections_lexical`
+  - `/api/rag` health reports `section_documents: 5000`
+  - hard-filter query `九人局家庭聚会，来个轻松点的` with player/time/complexity/age metadata filters returned only hits satisfying those atomic constraints
+  - production was not promoted
+- Latest preview smoke checks on `https://play-or-not-mkrsd6vz4-trikkagos-projects.vercel.app`:
+  - deployment ready state: `READY`
+  - `/api/rag` health returns `200`
+  - `x-rag-provider: python_rag`
+  - `x-rag-fallback: false`
+  - explicit hard-filter recommendation query `九人局家庭聚会，来个轻松点的` returned `uno`, `supermegaluckybox`, `flipseven`; all hits satisfy players/time/complexity/age constraints
+  - derived hard-filter recommendation query `九人局家庭聚会，30分钟内，规则简单，8岁孩子也能玩` returned `uno`, `supermegaluckybox`, `flipseven`; all hits satisfy query-derived players/time/complexity/age constraints
+  - referee query `阿瓦隆 刺客什么时候刺杀` returned only `avalon` hits
+  - production was not promoted
+- Historical blocker observed on an earlier preview:
+  - `POST /api/chat` with `stream: false` returned `504 FUNCTION_INVOCATION_TIMEOUT`
+  - after moving `api/chat` to `nodejs` and setting `maxDuration: 60`, `stream: false` still timed out and `stream: true` did not emit the first bytes within a `40s` curl window
+  - resolution: the previous preview was **not acceptance-ready**, but the new Edge-runtime preview has passed direct `/api/chat`, streaming, and TTS smoke checks with `deepseek-v3-2-251201` as the default
+  - remaining validation: user-facing frontend journey still needs manual acceptance, especially exact greeting behavior and one-game recommendation card timing

@@ -73,7 +73,7 @@ NEGATED_RECOMMENDATION_RULES: List[Tuple[re.Pattern, List[str]]] = [
     ),
     (
         re.compile(r"(?:完全)?(?:不想|不要|别|不考虑)(?:玩)?[^，。；,.;!?？！]{0,10}(?:对抗|博弈|互坑|互相伤害|伤感情)"),
-        ["高互动对抗", "对抗", "博弈", "互坑"],
+        ["高互动对抗", "抽象对战", "对抗", "博弈", "互坑"],
     ),
     (
         re.compile(r"(?:完全)?(?:不想|不要|别|不考虑)(?:玩)?[^，。；,.;!?？！]{0,10}(?:烧脑|重策|硬核)"),
@@ -81,9 +81,319 @@ NEGATED_RECOMMENDATION_RULES: List[Tuple[re.Pattern, List[str]]] = [
     ),
     (
         re.compile(r"别[^，。；,.;!?？！]{0,8}(?:伤感情|太伤|互坑|互相伤害)"),
-        ["高互动对抗", "对抗", "博弈", "互坑"],
+        ["高互动对抗", "抽象对战", "对抗", "博弈", "互坑"],
     ),
 ]
+
+# Popularity and classic-quality priors are intentionally small, query-time
+# tie-breakers. They should not replace vector/lexical relevance or metadata
+# compatibility; they only stop cold catalog matches from burying proven picks
+# when several games satisfy the same atomic filters and intent tags.
+POPULARITY_PRIOR_BY_GAME_ID: Dict[str, float] = {
+    "codenames": 0.98,
+    "wingspan": 0.98,
+    "terraforming-mars": 0.98,
+    "terraformingmars": 0.98,
+    "ticket-to-ride": 0.97,
+    "tickettoride": 0.97,
+    "tickettorideeurope": 0.95,
+    "azul": 0.96,
+    "splendor": 0.95,
+    "carcassonne": 0.95,
+    "7-wonders-duel": 0.95,
+    "sevenwondersduel": 0.95,
+    "pandemic": 0.94,
+    "castles-of-burgundy": 0.94,
+    "castleburgundy": 0.94,
+    "dune-imperium": 0.93,
+    "duneimperium": 0.93,
+    "agricola": 0.92,
+    "puerto-rico": 0.92,
+    "puertorico": 0.92,
+    "patchwork": 0.91,
+    "jaipur": 0.91,
+    "santorini": 0.90,
+    "camel-up": 0.90,
+    "camelup": 0.90,
+    "dixit": 0.88,
+    "just-one": 0.88,
+    "justone": 0.88,
+    "lostcities": 0.88,
+    "halli-galli": 0.87,
+    "halligalli": 0.87,
+    "stoneage": 0.86,
+    "kingdomino": 0.86,
+    "resarcana": 0.85,
+    "gaiaproject": 0.85,
+    "clansofcaledonia": 0.84,
+    "caverna": 0.84,
+    "viticulture": 0.84,
+    "greatwesterntrail": 0.83,
+    "raceforthegalaxy": 0.83,
+    "space-base": 0.82,
+    "spacebase": 0.82,
+    "forest-shuffle": 0.82,
+    "forestshuffle": 0.82,
+    "harmonies": 0.81,
+    "gizmos": 0.80,
+    "modern-art": 0.80,
+    "modernart": 0.80,
+    "heat": 0.78,
+    "dobble": 0.78,
+    "exploding-kittens": 0.76,
+    "explodingkittens": 0.76,
+    "uno": 0.76,
+    "scout": 0.75,
+    "toybattle": 0.74,
+    "potion-explosion": 0.74,
+    "potionexplosion": 0.74,
+    "seasaltpaper": 0.72,
+    "the-mind": 0.72,
+    "themind": 0.72,
+    "hanabi": 0.72,
+    "avalon": 0.72,
+    "werewolf-one-night": 0.70,
+    "blood-on-the-clocktower": 0.70,
+}
+
+RECOMMENDATION_INTENT_ANCHORS: List[Tuple[re.Pattern, Dict[str, float]]] = [
+    (
+        re.compile(r"(情侣|约会|两个人|双人).*(轻松|半小时|30分钟|休闲)|(?:轻松|半小时|30分钟).*(情侣|约会|两个人|双人)"),
+        {
+            "patchwork": 0.48,
+            "jaipur": 0.48,
+            "lostcities": 0.34,
+            "kingdomino": 0.20,
+            "seasaltpaper": 0.20,
+        },
+    ),
+    (
+        re.compile(r"(情侣|约会).*(安静|低冲突|不想太对抗|不想.*对抗)|(?:安静|低冲突|不想太对抗|不想.*对抗).*(情侣|约会)"),
+        {
+            "patchwork": 0.82,
+            "sea-salt-paper": 0.68,
+            "seasaltpaper": 0.68,
+            "kingdomino": 0.66,
+            "jaipur": 0.28,
+            "lostcities": 0.20,
+        },
+    ),
+    (
+        re.compile(r"(双人|两人|2人).*(对抗|博弈|单挑|斗智)|(?:对抗|博弈|单挑|斗智).*(双人|两人|2人)"),
+        {
+            "7-wonders-duel": 0.50,
+            "sevenwondersduel": 0.50,
+            "santorini": 0.48,
+            "jaipur": 0.38,
+            "lostcities": 0.36,
+            "toybattle": 0.32,
+            "splendorduel": 0.28,
+            "warchest": 0.24,
+        },
+    ),
+    (
+        re.compile(r"(聚会|人多|6个人|六个人|6人|5人以上|大团体).*(热闹|搞笑|欢乐)|(?:热闹|搞笑|欢乐).*(聚会|人多|6个人|六个人|6人|5人以上|大团体)"),
+        {
+            "camel-up": 0.48,
+            "camelup": 0.48,
+            "halli-galli": 0.46,
+            "halligalli": 0.46,
+            "codenames": 0.42,
+            "exploding-kittens": 0.34,
+            "explodingkittens": 0.34,
+            "dobble": 0.28,
+            "just-one": 0.26,
+            "justone": 0.26,
+            "dixit": 0.22,
+        },
+    ),
+    (
+        re.compile(r"(烧脑|重策|重策略|偏烧脑|策略游戏|硬核)"),
+        {
+            "castles-of-burgundy": 0.58,
+            "castleburgundy": 0.58,
+            "terraforming-mars": 0.58,
+            "terraformingmars": 0.58,
+            "dune-imperium": 0.56,
+            "duneimperium": 0.56,
+            "wingspan": 0.42,
+            "puerto-rico": 0.42,
+            "puertorico": 0.42,
+            "agricola": 0.42,
+            "clansofcaledonia": 0.40,
+            "resarcana": 0.36,
+            "viticulture": 0.34,
+            "gaiaproject": 0.34,
+            "caverna": 0.34,
+            "stoneage": 0.30,
+            "greatwesterntrail": 0.30,
+            "raceforthegalaxy": 0.30,
+        },
+    ),
+    (
+        re.compile(r"(中策略|有点策略|策略).*(低冲突|一小时|60分钟|安静)|(?:低冲突|一小时|60分钟|安静).*(中策略|有点策略|策略)"),
+        {
+            "wingspan": 0.52,
+            "pandemic": 0.48,
+            "harmonies": 0.44,
+            "forest-shuffle": 0.44,
+            "forestshuffle": 0.44,
+            "space-base": 0.42,
+            "spacebase": 0.42,
+            "gizmos": 0.34,
+            "azul": 0.28,
+            "carcassonne": 0.24,
+        },
+    ),
+    (
+        re.compile(r"(家里人|家庭|亲子|全家|带娃).*(规则简单|新手|上手快|半小时|30分钟)|(?:规则简单|新手|上手快|半小时|30分钟).*(家里人|家庭|亲子|全家|带娃)"),
+        {
+            "uno": 0.82,
+            "kingdomino": 0.80,
+            "potion-explosion": 0.76,
+            "potionexplosion": 0.76,
+            "scout": 0.72,
+            "just-one": 0.70,
+            "justone": 0.70,
+            "dobble": 0.30,
+            "halli-galli": 0.28,
+            "halligalli": 0.28,
+        },
+    ),
+    (
+        re.compile(r"(手牌管理).*(半小时|30分钟|朋友局|朋友|聚会)|(?:半小时|30分钟|朋友局|朋友|聚会).*(手牌管理)"),
+        {
+            "jaipur": 0.48,
+            "scout": 0.46,
+            "sea-salt-paper": 0.44,
+            "seasaltpaper": 0.44,
+            "mindup": 0.24,
+            "camel-up": 0.18,
+        },
+    ),
+    (
+        re.compile(r"(推荐|来个|求推荐).*(2到4|2至4|2-4|两到四|二到四)|(?:2到4|2至4|2-4|两到四|二到四).*(推荐|来个|求推荐|桌游)"),
+        {
+            "splendor": 0.50,
+            "ticket-to-ride": 0.48,
+            "tickettoride": 0.48,
+            "azul": 0.46,
+            "carcassonne": 0.44,
+            "stoneage": 0.40,
+            "gizmos": 0.38,
+            "kingdomino": 0.34,
+            "takenoko": 0.24,
+        },
+    ),
+]
+
+
+def _compact_game_id(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
+def _metadata_game_id(metadata: Dict[str, Any]) -> str:
+    game_id = metadata.get("game_id") or metadata.get("id") or ""
+    return str(game_id).strip()
+
+
+def _lookup_game_score(game_id: str, score_by_game_id: Dict[str, float]) -> float:
+    if not game_id:
+        return 0.0
+
+    normalized_id = game_id.strip().lower()
+    if normalized_id in score_by_game_id:
+        return score_by_game_id[normalized_id]
+
+    compact_id = _compact_game_id(normalized_id)
+    if compact_id in score_by_game_id:
+        return score_by_game_id[compact_id]
+
+    return 0.0
+
+
+def _popularity_prior_bonus(metadata: Dict[str, Any], query_text: str) -> float:
+    game_id = _metadata_game_id(metadata)
+    prior = _lookup_game_score(game_id, POPULARITY_PRIOR_BY_GAME_ID)
+    if prior <= 0:
+        return 0.0
+
+    # Keep the global prior subtle. Stronger boosts are only unlocked by
+    # intent-specific anchors below, after the hard metadata filters have run.
+    bonus = prior * 0.12
+    if re.search(r"(经典|耐玩|常青|稳|入门砖|口碑|推荐一个|来个|求推荐)", query_text):
+        bonus += prior * 0.06
+    return min(0.18, bonus)
+
+
+def _intent_anchor_bonus(metadata: Dict[str, Any], query_text: str) -> float:
+    game_id = _metadata_game_id(metadata)
+    if not game_id:
+        return 0.0
+
+    bonus = 0.0
+    for pattern, scores in RECOMMENDATION_INTENT_ANCHORS:
+        if pattern.search(query_text):
+            bonus += _lookup_game_score(game_id, scores)
+    return min(0.90, bonus)
+
+
+def _intent_shape_bonus(metadata: Dict[str, Any], query_text: str, recommendation_surface: str) -> float:
+    bonus = 0.0
+    game_id = _metadata_game_id(metadata)
+    complexity = metadata.get("complexity")
+    playtime_min = metadata.get("playtime_min")
+    min_players = metadata.get("min_players")
+    max_players = metadata.get("max_players")
+    prior = _lookup_game_score(game_id, POPULARITY_PRIOR_BY_GAME_ID)
+
+    has_mid_strategy_intent = bool(re.search(r"(中策略|有点策略|一小时左右的策略|策略桌游)", query_text))
+    has_heavy_strategy_intent = bool(re.search(r"(烧脑|重策|重策略|偏烧脑|硬核)", query_text))
+    has_big_party_intent = bool(re.search(r"(6个人以上|六个人以上|6人以上|人多|大团体).*(聚会|热闹|搞笑|欢乐)", query_text))
+    has_generic_range_intent = bool(
+        re.search(r"(推荐|来个|求推荐).*(2到4|2至4|2-4|两到四|二到四)|(?:2到4|2至4|2-4|两到四|二到四).*(推荐|来个|求推荐|桌游)", query_text)
+    )
+
+    if has_mid_strategy_intent and isinstance(complexity, (int, float)):
+        if 2.0 <= complexity <= 2.8:
+            bonus += 0.22
+        elif complexity < 1.6:
+            bonus -= 0.26
+        elif complexity >= 3.2 and not has_heavy_strategy_intent:
+            bonus -= 0.18
+
+    if has_heavy_strategy_intent and isinstance(complexity, (int, float)):
+        if complexity >= 2.8:
+            bonus += 0.22
+        elif complexity <= 2.0:
+            bonus -= 0.18
+
+    if has_big_party_intent and isinstance(min_players, (int, float)) and isinstance(max_players, (int, float)):
+        if max_players >= 6:
+            bonus += 0.18
+        if min_players <= 3:
+            bonus += 0.06
+        if max_players < 6:
+            bonus -= 0.24
+
+    if has_generic_range_intent:
+        if isinstance(min_players, (int, float)) and isinstance(max_players, (int, float)):
+            if min_players <= 2 and max_players >= 4:
+                bonus += 0.16
+            if max_players > 5:
+                bonus -= 0.10
+        if prior > 0:
+            bonus += prior * 0.14
+        if normalize_text("5人以上佳") in recommendation_surface or normalize_text("大团体适配") in recommendation_surface:
+            bonus -= 0.08
+
+    if re.search(r"(半小时|30分钟|不拖|不要太拖)", query_text) and isinstance(playtime_min, (int, float)):
+        if playtime_min <= 30:
+            bonus += 0.08
+        elif playtime_min > 45:
+            bonus -= 0.12
+
+    return bonus
 
 
 def _normalize_where(where: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -130,6 +440,44 @@ def _extract_filter_value(where: Optional[Dict[str, Any]], field: str) -> Option
                 return result
 
     return None
+
+
+def _has_where_field(where: Optional[Dict[str, Any]], field: str) -> bool:
+    if not where or not isinstance(where, dict):
+        return False
+
+    if field in where:
+        return True
+
+    for operator in ("$and", "$or"):
+        clauses = where.get(operator)
+        if not isinstance(clauses, list):
+            continue
+        if any(_has_where_field(clause, field) for clause in clauses if isinstance(clause, dict)):
+            return True
+
+    return False
+
+
+def _merge_where_and_clauses(
+    where: Optional[Dict[str, Any]],
+    clauses: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    clean_clauses = [clause for clause in clauses if clause]
+    if not clean_clauses:
+        return where
+
+    if not where:
+        if len(clean_clauses) == 1:
+            return clean_clauses[0]
+        return {"$and": clean_clauses}
+
+    if isinstance(where.get("$and"), list):
+        merged = dict(where)
+        merged["$and"] = list(where["$and"]) + clean_clauses
+        return merged
+
+    return {"$and": [where, *clean_clauses]}
 
 
 def _normalize_query_text(query: str) -> str:
@@ -207,6 +555,108 @@ def _parse_requested_max_playtime(query: str) -> Optional[int]:
         return int(minute_match.group(1))
 
     return None
+
+
+def _parse_requested_age_rating(query: str) -> Optional[int]:
+    trimmed = _normalize_query_text(query)
+    if not trimmed:
+        return None
+
+    numeric_match = re.search(r"(\d+)\s*(?:岁|歲)(?:\s*(?:以上|左右|孩子|小孩|儿童|小朋友))?", trimmed)
+    if numeric_match:
+        return int(numeric_match.group(1))
+
+    cn_number_map = {
+        "六": 6,
+        "七": 7,
+        "八": 8,
+        "九": 9,
+        "十": 10,
+        "十一": 11,
+        "十二": 12,
+        "十三": 13,
+        "十四": 14,
+    }
+    cn_match = re.search(r"(十一|十二|十三|十四|六|七|八|九|十)\s*(?:岁|歲)", trimmed)
+    if cn_match:
+        return cn_number_map.get(cn_match.group(1))
+
+    return None
+
+
+def _parse_requested_complexity_range(query: str) -> Dict[str, float]:
+    trimmed = _normalize_query_text(query)
+    if not trimmed:
+        return {}
+
+    numeric_max_match = re.search(r"(?:复杂度|难度)\s*(\d+(?:\.\d+)?)\s*(?:以内|以下|之内|以下的|以内的|以下吧|以内吧)", trimmed)
+    if numeric_max_match:
+        return {"max": float(numeric_max_match.group(1))}
+
+    numeric_min_match = re.search(r"(?:复杂度|难度)\s*(\d+(?:\.\d+)?)\s*(?:以上|往上|以上的)", trimmed)
+    if numeric_min_match:
+        return {"min": float(numeric_min_match.group(1))}
+
+    numeric_range_match = re.search(r"(?:复杂度|难度)\s*(\d+(?:\.\d+)?)\s*[-~到至]\s*(\d+(?:\.\d+)?)", trimmed)
+    if numeric_range_match:
+        left = float(numeric_range_match.group(1))
+        right = float(numeric_range_match.group(2))
+        return {"min": min(left, right), "max": max(left, right)}
+
+    if re.search(r"(重策|重策略|硬核|烧脑|深度|高复杂度)", trimmed) and not re.search(r"(别|不要|不想|太)", trimmed):
+        return {"min": 2.8}
+
+    if re.search(r"(中策|中策略|有点策略|有策略但别太重|有策略，但别太重)", trimmed):
+        return {"min": 1.4, "max": 2.8}
+
+    if re.search(r"(轻策|轻策略|别太重|不要太重|不想太重|别太烧脑|不要太烧脑|别太复杂|不要太复杂|规则简单|简单|新手|上手快)", trimmed):
+        return {"max": 2.4}
+
+    return {}
+
+
+def _derive_recommendation_where_from_query(
+    query: str,
+    mode: Optional[str],
+    where: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    if mode != "recommendation":
+        return where
+
+    clauses: List[Dict[str, Any]] = []
+    if not _has_where_field(where, "mode"):
+        clauses.append({"mode": "recommendation"})
+
+    requested_player_range = _parse_requested_player_range(query)
+    if requested_player_range is not None:
+        requested_min, requested_max = requested_player_range
+        if not _has_where_field(where, "min_players"):
+            clauses.append({"min_players": {"$lte": requested_min}})
+        if not _has_where_field(where, "max_players"):
+            clauses.append({"max_players": {"$gte": requested_max}})
+    else:
+        requested_player_count = _parse_requested_player_count(query)
+        if requested_player_count is not None:
+            if not _has_where_field(where, "min_players"):
+                clauses.append({"min_players": {"$lte": requested_player_count}})
+            if not _has_where_field(where, "max_players"):
+                clauses.append({"max_players": {"$gte": requested_player_count}})
+
+    requested_max_playtime = _parse_requested_max_playtime(query)
+    if requested_max_playtime is not None and not _has_where_field(where, "playtime_min"):
+        clauses.append({"playtime_min": {"$lte": requested_max_playtime}})
+
+    complexity_range = _parse_requested_complexity_range(query)
+    if "min" in complexity_range and not _has_where_field(where, "complexity"):
+        clauses.append({"complexity": {"$gte": complexity_range["min"]}})
+    if "max" in complexity_range and not _has_where_field(where, "complexity"):
+        clauses.append({"complexity": {"$lte": complexity_range["max"]}})
+
+    requested_age_rating = _parse_requested_age_rating(query)
+    if requested_age_rating is not None and not _has_where_field(where, "age_rating"):
+        clauses.append({"age_rating": {"$lte": requested_age_rating}})
+
+    return _merge_where_and_clauses(where, clauses)
 
 
 def _parse_requested_min_playtime(query: str) -> Optional[int]:
@@ -371,6 +821,78 @@ def _supplement_exact_title_lexical_hits(
         )
 
     supplemented_hits.sort(key=lambda item: item[1], reverse=True)
+    return supplemented_hits
+
+
+def _build_supplemental_recommendation_hits(
+    lexical_index: Any,
+    query_text: str,
+    where: Optional[Dict[str, Any]],
+    where_document: Optional[Dict[str, Any]],
+) -> List[Tuple[RetrievalHit, float]]:
+    if lexical_index is None:
+        return []
+
+    anchor_scores: Dict[str, float] = {}
+    for pattern, scores in RECOMMENDATION_INTENT_ANCHORS:
+        if not pattern.search(query_text):
+            continue
+        for game_id, score in scores.items():
+            normalized_id = game_id.strip().lower()
+            compact_id = _compact_game_id(normalized_id)
+            anchor_scores[normalized_id] = max(anchor_scores.get(normalized_id, 0.0), score)
+            if compact_id:
+                anchor_scores[compact_id] = max(anchor_scores.get(compact_id, 0.0), score)
+
+    if not anchor_scores:
+        return []
+
+    preferred_section_rank = {
+        "rec_fit": 5,
+        "rec_summary": 4,
+        "rec_tags": 3,
+        "rec_search": 2,
+    }
+    best_by_game_id: Dict[str, Tuple[RetrievalHit, float]] = {}
+
+    for document in lexical_index.documents:
+        metadata = document.chunk.metadata or {}
+        if not matches_metadata_filter(metadata, where):
+            continue
+        if not matches_document_filter(document.search_text, where_document):
+            continue
+
+        game_id = _metadata_game_id(metadata)
+        anchor_score = _lookup_game_score(game_id, anchor_scores)
+        if anchor_score <= 0:
+            continue
+
+        section_id = str(metadata.get("section_id") or document.chunk.section_id or "").strip()
+        section_rank = preferred_section_rank.get(section_id, 0)
+        if section_rank <= 0:
+            continue
+
+        popularity_score = _lookup_game_score(game_id, POPULARITY_PRIOR_BY_GAME_ID)
+        lexical_score = 92.0 + (anchor_score * 24.0) + (popularity_score * 8.0) + section_rank
+        hit = RetrievalHit(
+            chunk_id=document.chunk.chunk_id,
+            document_id=document.chunk.document_id,
+            title=document.chunk.title,
+            text=document.chunk.text,
+            source=document.chunk.source,
+            distance=0.0,
+            score=lexical_score,
+            section_id=document.chunk.section_id,
+            section_title=document.chunk.section_title,
+            metadata=document.chunk.metadata or {},
+            retrieval_sources=["lexical-intent-anchor"],
+        )
+        compact_id = _compact_game_id(game_id)
+        existing = best_by_game_id.get(compact_id)
+        if existing is None or lexical_score > existing[1]:
+            best_by_game_id[compact_id] = (hit, lexical_score)
+
+    supplemented_hits = sorted(best_by_game_id.values(), key=lambda item: item[1], reverse=True)
     return supplemented_hits
 
 
@@ -620,6 +1142,9 @@ def _metadata_bonus(
         )
         complexity = metadata.get("complexity")
         playtime_min = metadata.get("playtime_min")
+        bonus += _popularity_prior_bonus(metadata, query_text)
+        bonus += _intent_anchor_bonus(metadata, query_text)
+        bonus += _intent_shape_bonus(metadata, query_text, normalized_recommendation_surface)
         if normalized_recommendation_surface:
             matched_terms = sum(1 for term in query_terms if len(term) >= 2 and term in normalized_recommendation_surface)
             bonus += min(0.24, matched_terms * 0.03)
@@ -755,6 +1280,8 @@ def _metadata_bonus(
             if mid_strategy_query:
                 if normalize_text("中策略") in normalized_recommendation_surface:
                     bonus += 0.14
+                elif normalize_text("轻策略") in normalized_recommendation_surface:
+                    bonus -= 0.16
                 matched_strategy_mechanics = sum(
                     1 for term in strategy_mechanic_terms if normalize_text(term) in normalized_recommendation_surface
                 )
@@ -774,13 +1301,16 @@ def _metadata_bonus(
                     if complexity <= 1.4:
                         bonus -= 0.10
                     elif complexity <= 1.8:
-                        bonus += 0.02
+                        bonus -= 0.06
                     elif complexity <= 2.6:
                         bonus += 0.14
                     elif complexity <= 2.9:
                         bonus += 0.02
                     else:
                         bonus -= 0.20
+                if re.search(r"(一小时|60分钟)", query_text) and not re.search(r"(半小时|30分钟|不拖|不要太拖)", query_text):
+                    if isinstance(playtime_min, (int, float)) and playtime_min < 20:
+                        bonus -= 0.12
 
             if betting_query:
                 if normalize_text("拍卖押注") in normalized_recommendation_surface:
@@ -1228,6 +1758,12 @@ def query_documents(
     store = ChromaVectorStore(settings)
     normalized_where = _normalize_where(where)
     derived_mode = mode or _extract_filter_value(normalized_where, "mode")
+    normalized_where = _derive_recommendation_where_from_query(
+        query=query,
+        mode=derived_mode,
+        where=normalized_where,
+    )
+    derived_mode = mode or _extract_filter_value(normalized_where, "mode")
     derived_active_game_id = active_game_id or _extract_filter_value(normalized_where, "game_id")
     bootstrap_ms = (time.perf_counter() - bootstrap_started_at) * 1000
 
@@ -1307,6 +1843,16 @@ def query_documents(
                     where_document=where_document,
                 ),
             )
+        if derived_mode == "recommendation":
+            lexical_hits_raw = _merge_lexical_hits(
+                lexical_hits_raw,
+                _build_supplemental_recommendation_hits(
+                    lexical_index=lexical_index,
+                    query_text=query,
+                    where=normalized_where,
+                    where_document=where_document,
+                ),
+            )
     lexical_ms = (time.perf_counter() - lexical_started_at) * 1000
 
     fuse_started_at = time.perf_counter()
@@ -1333,6 +1879,7 @@ def query_documents(
         "rewrite_expansions": rewrite_expansions,
         "negative_terms": negative_terms,
         "section_target": section_target,
+        "derived_where": normalized_where,
         "dense_candidates": len(dense_hits),
         "lexical_candidates": len(lexical_hits_raw),
         "hybrid_enabled": lexical_index is not None,

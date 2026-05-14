@@ -94,16 +94,36 @@ const parseInline = (text: string): React.ReactNode[] => {
 interface MarkdownTextProps {
     content: string;
     className?: string;
+    showCursor?: boolean;
 }
 
 /**
  * A robust, rich-text Markdown renderer.
  * Supports Block styles (Headers, Lists, Quotes, Code Blocks) and Inline styles.
  */
-export const MarkdownText: React.FC<MarkdownTextProps> = ({ content, className = '' }) => {
+export const MarkdownText: React.FC<MarkdownTextProps> = ({ content, className = '', showCursor = false }) => {
     if (!content) return null;
 
     const lines = content.split(/\r?\n/);
+    const cursor = showCursor ? (
+        <span
+            key="streaming-cursor"
+            data-testid="markdown-streaming-cursor"
+            aria-hidden="true"
+            className="inline-block w-1.5 h-4 bg-black ml-0.5 animate-pulse align-[-2px]"
+        />
+    ) : null;
+    const lastContentLineIndex = (() => {
+        for (let index = lines.length - 1; index >= 0; index -= 1) {
+            if (lines[index].trim()) {
+                return index;
+            }
+        }
+        return lines.length - 1;
+    })();
+    const withCursor = (nodes: React.ReactNode[], lineIndex: number) => (
+        showCursor && lineIndex === lastContentLineIndex ? [...nodes, cursor] : nodes
+    );
     let inCodeBlock = false;
 
     return (
@@ -122,7 +142,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({ content, className =
                 if (inCodeBlock) {
                     return (
                         <div key={i} className="font-mono text-xs bg-gray-800 text-gray-200 px-3 py-0.5 first:rounded-t last:rounded-b border-l-2 border-blue-500">
-                            {line || '\u00A0'}
+                            {line || '\u00A0'}{showCursor && i === lastContentLineIndex ? cursor : null}
                         </div>
                     );
                 }
@@ -132,13 +152,13 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({ content, className =
 
                 // 4. Headers (#)
                 if (line.startsWith('# ')) {
-                    return <h3 key={i} className="text-lg font-black text-black mt-4 mb-2">{parseInline(line.slice(2))}</h3>;
+                    return <h3 key={i} className="text-lg font-black text-black mt-4 mb-2">{withCursor(parseInline(line.slice(2)), i)}</h3>;
                 }
                 if (line.startsWith('## ')) {
-                    return <h4 key={i} className="text-base font-bold text-gray-900 mt-3 mb-1">{parseInline(line.slice(3))}</h4>;
+                    return <h4 key={i} className="text-base font-bold text-gray-900 mt-3 mb-1">{withCursor(parseInline(line.slice(3)), i)}</h4>;
                 }
                 if (line.startsWith('### ')) {
-                    return <h5 key={i} className="text-sm font-bold text-gray-700 mt-2">{parseInline(line.slice(4))}</h5>;
+                    return <h5 key={i} className="text-sm font-bold text-gray-700 mt-2">{withCursor(parseInline(line.slice(4)), i)}</h5>;
                 }
 
                 // 5. List items (*, -)
@@ -147,7 +167,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({ content, className =
                     return (
                         <div key={i} className="flex gap-2 ml-1 items-start">
                             <span className="text-blue-500 font-bold mt-0.5 flex-shrink-0">•</span>
-                            <span className="flex-1">{parseInline(listMatch[1])}</span>
+                            <span className="flex-1">{withCursor(parseInline(listMatch[1]), i)}</span>
                         </div>
                     );
                 }
@@ -158,7 +178,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({ content, className =
                     return (
                         <div key={i} className="flex gap-2 ml-1 items-start">
                             <span className="text-blue-500 font-bold font-mono text-xs mt-1 flex-shrink-0">{numMatch[1]}.</span>
-                            <span className="flex-1">{parseInline(numMatch[2])}</span>
+                            <span className="flex-1">{withCursor(parseInline(numMatch[2]), i)}</span>
                         </div>
                     );
                 }
@@ -167,13 +187,13 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({ content, className =
                 if (trimmed.startsWith('> ')) {
                     return (
                         <div key={i} className="border-l-4 border-yellow-400 bg-yellow-50 pl-3 py-2 my-2 text-gray-600 italic rounded-r text-xs">
-                            {parseInline(trimmed.slice(2))}
+                            {withCursor(parseInline(trimmed.slice(2)), i)}
                         </div>
                     );
                 }
 
                 // 8. Normal Paragraph
-                return <div key={i} className="min-h-[1.5em]">{parseInline(line)}</div>;
+                return <div key={i} className="min-h-[1.5em]">{withCursor(parseInline(line), i)}</div>;
             })}
         </div>
     );

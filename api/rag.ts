@@ -166,6 +166,25 @@ function normalizeBaseUrl(rawBaseUrl?: string) {
   return (rawBaseUrl || DEFAULT_RAG_SERVICE_URL).trim().replace(/\/+$/, '');
 }
 
+function shouldRequireRagService() {
+  return /^(1|true|yes)$/i.test(process.env.RAG_REQUIRE_SERVICE?.trim() || '');
+}
+
+function ragServiceUnavailableResponse(error: unknown) {
+  return jsonResponse({
+    error: 'Configured RAG service is unavailable.',
+    code: 'rag_service_unavailable',
+    hint: 'Check RAG_SERVICE_URL, the Python RAG service health endpoint, and deployment networking before accepting this environment.',
+    detail: error instanceof Error ? error.message : String(error),
+  }, {
+    status: 503,
+    headers: {
+      'x-rag-provider': 'unavailable',
+      'x-rag-required': 'true',
+    },
+  });
+}
+
 function uint8ArrayToArrayBuffer(value: Uint8Array) {
   const copied = new Uint8Array(value.byteLength);
   copied.set(value);
@@ -411,6 +430,9 @@ function parseRequestedPlayerRange(query: string): [number, number] | undefined 
 
 function parseRequestedMaxPlaytime(query: string) {
   const trimmed = normalizeQueryText(query);
+  if (/(半小时|30分钟|一小时|60分钟)\s*(以上|起步|及以上|往上)/.test(trimmed)) {
+    return undefined;
+  }
   if (trimmed.includes('半小时')) {
     return 30;
   }
@@ -418,8 +440,64 @@ function parseRequestedMaxPlaytime(query: string) {
     return 60;
   }
 
-  const minuteMatch = trimmed.match(/(\d+)\s*分钟/);
+  const minuteMatch = trimmed.match(/(\d+)\s*分钟(?!\s*(以上|起步|及以上|往上))/);
   return minuteMatch ? Number(minuteMatch[1]) : undefined;
+}
+
+function parseRequestedAgeRating(query: string) {
+  const trimmed = normalizeQueryText(query);
+  const numericMatch = trimmed.match(/(\d+)\s*(?:岁|歲)(?:\s*(?:以上|左右|孩子|小孩|儿童|小朋友))?/);
+  if (numericMatch) {
+    return Number(numericMatch[1]);
+  }
+
+  const cnNumberMap: Record<string, number> = {
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+    十: 10,
+    十一: 11,
+    十二: 12,
+    十三: 13,
+    十四: 14,
+  };
+  const cnMatch = trimmed.match(/(十一|十二|十三|十四|六|七|八|九|十)\s*(?:岁|歲)/);
+  return cnMatch ? cnNumberMap[cnMatch[1]] : undefined;
+}
+
+function parseRequestedComplexityRange(query: string): { min?: number; max?: number } {
+  const trimmed = normalizeQueryText(query);
+  const numericMaxMatch = trimmed.match(/(?:复杂度|难度)\s*(\d+(?:\.\d+)?)\s*(?:以内|以下|之内|以下的|以内的|以下吧|以内吧)/);
+  if (numericMaxMatch) {
+    return { max: Number(numericMaxMatch[1]) };
+  }
+
+  const numericMinMatch = trimmed.match(/(?:复杂度|难度)\s*(\d+(?:\.\d+)?)\s*(?:以上|往上|以上的)/);
+  if (numericMinMatch) {
+    return { min: Number(numericMinMatch[1]) };
+  }
+
+  const numericRangeMatch = trimmed.match(/(?:复杂度|难度)\s*(\d+(?:\.\d+)?)\s*[-~到至]\s*(\d+(?:\.\d+)?)/);
+  if (numericRangeMatch) {
+    const left = Number(numericRangeMatch[1]);
+    const right = Number(numericRangeMatch[2]);
+    return { min: Math.min(left, right), max: Math.max(left, right) };
+  }
+
+  if (/(重策|重策略|硬核|烧脑|深度|高复杂度)/.test(trimmed) && !/(别|不要|不想|太)/.test(trimmed)) {
+    return { min: 2.8 };
+  }
+
+  if (/(中策|中策略|有点策略|有策略但别太重|有策略，但别太重)/.test(trimmed)) {
+    return { min: 1.4, max: 2.8 };
+  }
+
+  if (/(轻策|轻策略|别太重|不要太重|不想太重|别太烧脑|不要太烧脑|别太复杂|不要太复杂|规则简单|简单|新手|上手快)/.test(trimmed)) {
+    return { max: 2.4 };
+  }
+
+  return {};
 }
 
 function extractFilterValue(where: unknown, field: string): string | undefined {
@@ -446,6 +524,105 @@ function extractFilterValue(where: unknown, field: string): string | undefined {
   }
 
   return undefined;
+}
+
+function hasWhereField(where: unknown, field: string): boolean {
+  if (!where || typeof where !== 'object') {
+    return false;
+  }
+
+  if (field in (where as Record<string, unknown>)) {
+    return true;
+  }
+
+  for (const key of ['$and', '$or']) {
+    const clauses = (where as Record<string, unknown>)[key];
+    if (!Array.isArray(clauses)) {
+      continue;
+    }
+    if (clauses.some((clause) => hasWhereField(clause, field))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function mergeWhereAndClauses(where: unknown, clauses: Record<string, unknown>[]) {
+  const cleanClauses = clauses.filter((clause) => Object.keys(clause).length > 0);
+  if (cleanClauses.length === 0) {
+    return where;
+  }
+
+  if (!where || typeof where !== 'object' || Object.keys(where as Record<string, unknown>).length === 0) {
+    return cleanClauses.length === 1 ? cleanClauses[0] : { $and: cleanClauses };
+  }
+
+  const whereRecord = where as Record<string, unknown>;
+  if (Array.isArray(whereRecord.$and)) {
+    return {
+      ...whereRecord,
+      $and: [...whereRecord.$and, ...cleanClauses],
+    };
+  }
+
+  return {
+    $and: [
+      whereRecord,
+      ...cleanClauses,
+    ],
+  };
+}
+
+function deriveRecommendationWhereFromQuery(query: string, mode: string | undefined, where: unknown) {
+  if (mode !== 'recommendation') {
+    return where;
+  }
+
+  const clauses: Record<string, unknown>[] = [];
+  if (!hasWhereField(where, 'mode')) {
+    clauses.push({ mode: 'recommendation' });
+  }
+
+  const playerRange = parseRequestedPlayerRange(query);
+  if (playerRange) {
+    if (!hasWhereField(where, 'min_players')) {
+      clauses.push({ min_players: { $lte: playerRange[0] } });
+    }
+    if (!hasWhereField(where, 'max_players')) {
+      clauses.push({ max_players: { $gte: playerRange[1] } });
+    }
+  } else {
+    const requestedPlayerCount = parseRequestedPlayerCount(query);
+    if (typeof requestedPlayerCount === 'number') {
+      if (!hasWhereField(where, 'min_players')) {
+        clauses.push({ min_players: { $lte: requestedPlayerCount } });
+      }
+      if (!hasWhereField(where, 'max_players')) {
+        clauses.push({ max_players: { $gte: requestedPlayerCount } });
+      }
+    }
+  }
+
+  const maxPlaytime = parseRequestedMaxPlaytime(query);
+  if (typeof maxPlaytime === 'number' && !hasWhereField(where, 'playtime_min')) {
+    clauses.push({ playtime_min: { $lte: maxPlaytime } });
+  }
+
+  const complexityRange = parseRequestedComplexityRange(query);
+  if (typeof complexityRange.min === 'number' && !hasWhereField(where, 'complexity')) {
+    clauses.push({ complexity: { $gte: complexityRange.min } });
+  }
+  if (typeof complexityRange.max === 'number' && !hasWhereField(where, 'complexity')) {
+    clauses.push({ complexity: { $lte: complexityRange.max } });
+  }
+
+  const maxAgeRating = parseRequestedAgeRating(query);
+  if (typeof maxAgeRating === 'number' && !hasWhereField(where, 'age_rating')) {
+    clauses.push({ age_rating: { $lte: maxAgeRating } });
+  }
+
+  return mergeWhereAndClauses(where, clauses);
 }
 
 function matchesWhereClause(section: LocalKnowledgeSection, where: unknown): boolean {
@@ -1011,6 +1188,11 @@ async function localHealthResponse() {
     provider: 'local_sections_lexical',
     section_documents: sections.length,
     source_file: 'knowledge/boardgame_kb_sections.jsonl',
+  }, {
+    headers: {
+      'x-rag-provider': 'local_sections_lexical',
+      'x-rag-fallback': 'true',
+    },
   });
 }
 
@@ -1033,6 +1215,7 @@ async function runLocalRagFallback(body: RagQueryBody) {
   const activeGameId = (typeof body.active_game_id === 'string' && body.active_game_id.trim())
     || extractFilterValue(body.where, 'game_id')
     || undefined;
+  const effectiveWhere = deriveRecommendationWhereFromQuery(query, derivedMode, body.where);
   const {
     rewrittenQuery,
     rewriteExpansions,
@@ -1041,7 +1224,7 @@ async function runLocalRagFallback(body: RagQueryBody) {
   const queryTerms = extractQueryTerms(rewrittenQuery);
 
   const scoredItems = sections
-    .filter((section) => matchesWhereClause(section, body.where))
+    .filter((section) => matchesWhereClause(section, effectiveWhere))
     .map((section) => ({
       section,
       score: scoreLocalSection(section, queryTerms, derivedMode, activeGameId, rewrittenQuery, negativeTerms),
@@ -1061,10 +1244,16 @@ async function runLocalRagFallback(body: RagQueryBody) {
       rewritten_query: rewrittenQuery !== query ? rewrittenQuery : null,
       rewrite_expansions: rewriteExpansions,
       negative_terms: negativeTerms,
+      derived_where: effectiveWhere ?? null,
       query_terms: queryTerms.slice(0, 24),
       fallback: true,
       aggregation_scope: derivedMode === 'recommendation' ? 'game' : null,
       source_file: 'knowledge/boardgame_kb_sections.jsonl',
+    },
+  }, {
+    headers: {
+      'x-rag-provider': 'local_sections_lexical',
+      'x-rag-fallback': 'true',
     },
   });
 }
@@ -1086,7 +1275,14 @@ async function proxyRagRequest(req: Request, baseUrl: string) {
 
   if (req.method === 'POST') {
     const body = await req.json().catch(() => ({}));
-    requestInit.body = JSON.stringify(body);
+    const query = typeof body.query === 'string' ? body.query.trim() : '';
+    const derivedMode = (typeof body.mode === 'string' && body.mode.trim())
+      || extractFilterValue(body.where, 'mode')
+      || undefined;
+    requestInit.body = JSON.stringify({
+      ...body,
+      where: deriveRecommendationWhereFromQuery(query, derivedMode, body.where),
+    });
   }
 
   const response = await fetch(`${baseUrl}${targetPath}`, requestInit);
@@ -1098,6 +1294,8 @@ async function proxyRagRequest(req: Request, baseUrl: string) {
       'Content-Type': response.headers.get('content-type') || 'application/json',
       'Cache-Control': 'no-store',
       'Link': '</openapi.json>; rel="service-desc", </developers/>; rel="help", </llms.txt>; rel="describedby"',
+      'x-rag-provider': 'python_rag',
+      'x-rag-fallback': 'false',
     },
   });
 }
@@ -1127,14 +1325,19 @@ async function handleFetchRequest(req: Request) {
   }
 
   const baseUrl = normalizeBaseUrl(configuredBaseUrl);
+  const fallbackRequest = req.method === 'POST' ? req.clone() : undefined;
   try {
     return await proxyRagRequest(req, baseUrl);
   } catch (error) {
+    if (shouldRequireRagService()) {
+      return ragServiceUnavailableResponse(error);
+    }
+
     if (req.method === 'GET') {
       return localHealthResponse();
     }
 
-    const body = await req.json().catch(() => ({})) as RagQueryBody;
+    const body = await (fallbackRequest ?? req).json().catch(() => ({})) as RagQueryBody;
     return runLocalRagFallback(body);
   }
 }

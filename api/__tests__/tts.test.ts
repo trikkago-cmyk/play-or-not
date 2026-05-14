@@ -31,6 +31,24 @@ describe('/api/tts agent-friendly contract', () => {
     expect(payload.required_fields).toContain('text');
   });
 
+  it('normalizes newline-polluted Doubao env values from local env pulls', async () => {
+    process.env.TTS_PROVIDER = 'doubao_tts\\n';
+    process.env.DOUBAO_TTS_API_KEY = 'test-doubao-key\\n';
+    process.env.DOUBAO_TTS_VOICE_TYPE = 'zh_female_tianmeixiaoyuan_uranus_bigtts\\n';
+    delete process.env.MINIMAX_TTS_API_KEY;
+
+    const response = await ttsHandler(new Request('http://localhost/api/tts', {
+      method: 'GET',
+    }));
+
+    expect(response.status).toBe(200);
+
+    const payload = await response.json();
+    expect(payload.current_provider).toBe('doubao_tts');
+    expect(payload.server_provider_configured).toBe(true);
+    expect(payload.current_voice_id).toBe('zh_female_tianmeixiaoyuan_uranus_bigtts');
+  });
+
   it('returns a structured validation error when text is missing', async () => {
     const response = await ttsHandler(new Request('http://localhost/api/tts', {
       method: 'POST',
@@ -107,5 +125,46 @@ describe('/api/tts agent-friendly contract', () => {
 
     const bytes = new Uint8Array(await response.arrayBuffer());
     expect(Array.from(bytes)).toEqual([10, 20, 30]);
+  });
+
+  it('trims local env pull suffixes before proxying Doubao audio', async () => {
+    process.env.TTS_PROVIDER = 'doubao_tts\\n';
+    process.env.DOUBAO_TTS_API_KEY = 'test-doubao-key\\n';
+    process.env.DOUBAO_TTS_VOICE_TYPE = 'zh_female_tianmeixiaoyuan_uranus_bigtts\\n';
+    delete process.env.MINIMAX_TTS_API_KEY;
+
+    const upstreamFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect((init?.headers as Record<string, string>)['X-Api-Key']).toBe('test-doubao-key');
+
+      return new Response(
+        'event: 352\ndata: {"code":0,"data":"AAEC"}\n\n'
+        + 'event: 152\ndata: {"code":20000000}\n\n',
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/event-stream',
+          },
+        },
+      );
+    });
+
+    vi.stubGlobal('fetch', upstreamFetch);
+
+    const response = await ttsHandler(new Request('http://localhost/api/tts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: '欢迎来到今晚的桌游局。',
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-tts-provider')).toBe('doubao_tts');
+    expect(response.headers.get('x-tts-voice-id')).toBe('zh_female_tianmeixiaoyuan_uranus_bigtts');
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect(Array.from(bytes)).toEqual([0, 1, 2]);
   });
 });

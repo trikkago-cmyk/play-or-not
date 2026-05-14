@@ -27,6 +27,27 @@ class MockSpeechSynthesisUtterance {
   }
 }
 
+class BasicMockAudio {
+  src: string;
+  volume = 1;
+  preload = 'auto';
+  currentTime = 0;
+  onended?: () => void;
+  onerror?: () => void;
+
+  constructor(src = '') {
+    this.src = src;
+  }
+
+  play() {
+    return Promise.resolve();
+  }
+
+  pause() {
+    return undefined;
+  }
+}
+
 function createVoice(name: string, lang: string, extra: Partial<SpeechSynthesisVoice> = {}): SpeechSynthesisVoice {
   return {
     name,
@@ -78,7 +99,7 @@ describe('dmTtsService', () => {
 
     Object.defineProperty(window, 'Audio', {
       configurable: true,
-      value: undefined,
+      value: BasicMockAudio,
     });
 
     Object.defineProperty(window, 'speechSynthesis', {
@@ -129,6 +150,7 @@ describe('dmTtsService', () => {
     const femaleVoice = createVoice('Microsoft Xiaoxiao Online (Natural)', 'zh-CN');
     const maleVoice = createVoice('Microsoft Yunxi Online (Natural)', 'zh-CN');
     getVoicesMock.mockReturnValue([maleVoice, femaleVoice]);
+    localStorage.setItem('dm_luosi_tts_allow_browser_fallback_v1', 'true');
 
     const didSpeak = await speakAsDm('**欢迎来到桌游局。**\n\n**参考依据**\n- [证据1] 示例');
 
@@ -141,6 +163,16 @@ describe('dmTtsService', () => {
     expect(utterance.text).toBe('欢迎来到桌游局。');
     expect(utterance.voice?.name).toContain('Xiaoxiao');
     expect(utterance.lang).toBe('zh-CN');
+  });
+
+  it('keeps browser speech fallback disabled by default on localhost', async () => {
+    getVoicesMock.mockReturnValue([createVoice('Microsoft Xiaoxiao Online (Natural)', 'zh-CN')]);
+
+    const didSpeak = await speakAsDm('欢迎来到桌游局。');
+
+    expect(didSpeak).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(speakMock).toHaveBeenCalledTimes(0);
   });
 
   it('does not silently fall back to browser speech on hosted production domains', async () => {
@@ -236,6 +268,7 @@ describe('dmTtsService', () => {
   it('queues speech on gesture-restricted browsers until primed by a user gesture', async () => {
     const femaleVoice = createVoice('Microsoft Xiaoxiao Online (Natural)', 'zh-CN');
     getVoicesMock.mockReturnValue([femaleVoice]);
+    localStorage.setItem('dm_luosi_tts_allow_browser_fallback_v1', 'true');
 
     Object.defineProperty(window.navigator, 'userAgent', {
       configurable: true,
@@ -253,10 +286,10 @@ describe('dmTtsService', () => {
     expect(didPrime).toBe(true);
     expect(hasDmTtsPrimedPlayback()).toBe(true);
     await vi.waitFor(() => {
-      expect(speakMock).toHaveBeenCalledTimes(2);
+      expect(speakMock).toHaveBeenCalledTimes(1);
     });
 
-    const replayUtterance = speakMock.mock.calls[1][0] as MockSpeechSynthesisUtterance;
+    const replayUtterance = speakMock.mock.calls[0][0] as MockSpeechSynthesisUtterance;
     expect(replayUtterance.text).toBe('欢迎来到桌游局。');
   });
 });

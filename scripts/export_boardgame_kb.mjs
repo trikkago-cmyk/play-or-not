@@ -193,6 +193,13 @@ function formatListLine(label, values) {
   return joined ? `- ${label}：${joined}` : '';
 }
 
+function joinNonEmptyPhrases(values) {
+  return values
+    .map((value) => compactText(value))
+    .filter(Boolean)
+    .join('、');
+}
+
 function buildRecommendationHighlights(profile) {
   const phrases = [];
 
@@ -306,6 +313,12 @@ function createRecommendationSections(game) {
   const templateText = buildRecommendationQueryTemplates(game, profile).map((item) => `- ${item}`).join('\n');
   const bestPlayerText = joinValues(toArray(game.bestPlayerCount).map(String)) || `${game.minPlayers}-${game.maxPlayers}`;
   const searchTermsText = joinValues(profile.searchTerms);
+  const userDescriptionHints = joinNonEmptyPhrases([
+    joinValues(profile.occasionTags),
+    joinValues(profile.moodTags),
+    joinValues(profile.interactionTags),
+    joinValues(profile.mechanicTags),
+  ]);
 
   return [
     {
@@ -349,11 +362,11 @@ function createRecommendationSections(game) {
       section_id: 'rec_search',
       section_type: 'recommendation',
       heading: '推荐检索语料',
-      content: compactText(`
-如果用户想找：${searchTermsText || joinValues(profile.allTags)}，这款游戏都应被视为高相关候选。
-用户可能会这样描述它：${joinValues(profile.occasionTags)}、${joinValues(profile.moodTags)}、${joinValues(profile.interactionTags)}、${joinValues(profile.mechanicTags)}。
-${buildRecommendationQueryTemplates(game, profile).join('\n')}
-      `),
+      content: compactText([
+        `如果用户想找：${searchTermsText || joinValues(profile.allTags)}，这款游戏都应被视为高相关候选。`,
+        userDescriptionHints ? `用户可能会这样描述它：${userDescriptionHints}。` : '',
+        buildRecommendationQueryTemplates(game, profile).join('\n'),
+      ].filter(Boolean).join('\n')),
     },
   ].filter((section) => section.content.length > 0);
 }

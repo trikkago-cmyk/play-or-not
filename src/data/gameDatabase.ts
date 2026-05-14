@@ -189,6 +189,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 两个人同时喊出来？**
   - A: 动作快的人（先把牌放下去/拿走的人）有效。
 `,
+    commonQuestions: ['怎么找相同符号？', '同时喊算谁？', '有哪些玩法？', '找不到怎么办？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=哆宝+桌游教学',
     knowledgeBase: `
 ## 1. 游戏原理
@@ -287,6 +288,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 如果没人死（所有人投的票都很分散）怎么办？**
   - A: 如果所有人得票都是1票（或平票且无人被指认），则无人死亡。如果此时场上真的**没有狼人**（狼都在底牌里），好人获胜。如果有狼人，狼人获胜。
 `,
+    commonQuestions: ['最终身份怎么算？', '投死狼人谁赢？', '没人死亡怎么办？', '底牌有几张？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=一夜终极狼人+桌游教学',
     knowledgeBase: `
 ## 1. 核心逻辑
@@ -474,6 +476,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 这一行已经有蓝色了，还能再放蓝色吗？**
   - A: 右侧墙壁对应行如果已经有蓝色，左侧准备区那一行就**不能**再放蓝色了。
 `,
+    commonQuestions: ['怎么拿砖？', '地板怎么扣分？', '什么时候上墙？', '游戏什么时候结束？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=花砖物语+桌游教学',
     knowledgeBase: `
 ## 1. 游戏流程
@@ -577,6 +580,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 可以喊"过"吗？**
   - A: 不可以。任何语言交流都是作弊。
 `,
+    commonQuestions: ['可以说话吗？', '出错怎么办？', '飞镖怎么用？', '怎么过关？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=心灵同步+桌游教学',
     knowledgeBase: `
 ## 1. 绝对禁令
@@ -624,6 +628,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 爆发是什么？**
   - A: 一个城市如果有3个毒，再加第4个时，会发生爆发。它还是3个，但周围所有连接城市各+1毒。这可能引起连锁爆发。
 `,
+    commonQuestions: ['怎么赢？', '怎么研发解药？', '爆发怎么结算？', '分享知识有什么限制？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=瘟疫危机+桌游教学',
     knowledgeBase: `
 ## 1. 获胜与失败
@@ -664,7 +669,13 @@ const RAW_GAME_DATABASE: Game[] = [
       flow: '- **提示**：告诉队友"你手里的红色在哪"或"你手里的数字1在哪"（必须指全，消耗线索）。\n- **弃牌**：扔一张牌，回复一个线索。\n- **出牌**：盲打一张手牌，希望能接上。错了扣命。',
       tips: '> 你看不见自己的牌，只能看见队友的。\n\n- **逻辑**：如果队友提示你有"红牌"，通常意味着这牌现在能出。\n- **记忆**：千万别忘了队友给你的提示！'
     },
-    FAQ: ``,
+    FAQ: `
+- **Q: 提示时可以只提示其中一张红色吗？**
+  - A: 不可以。提示颜色或数字时，必须指出该玩家手牌中所有符合条件的牌。
+- **Q: 打错牌会怎样？**
+  - A: 这张牌进弃牌堆，并扣1个红色指示物。扣到第3个红色指示物时游戏失败。
+`,
+    commonQuestions: ['怎么给提示？', '提示必须指全吗？', '打错牌怎么办？', '弃牌有什么用？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=花火+桌游教学',
     knowledgeBase: `
 ## 1. 核心反直觉
@@ -711,6 +722,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 可以跳过建造吗？**
   - A: 除非神力允许，否则必须移动然后建造。
 `,
+    commonQuestions: ['怎么赢？', '上楼有限制吗？', '可以跳过建造吗？', '蓝屋顶有什么用？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=圣托里尼+桌游教学',
     knowledgeBase: `
 ## 1. 基本规则（无神力版）
@@ -756,6 +768,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 7x7奖励是什么？**
   - A: 第一个在自己版图上填满7x7完整区域的人，拿走奖励片（+7分）。
 `,
+    commonQuestions: ['谁先行动？', '怎么买布？', '怎么拿纽扣？', '空格怎么扣分？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=拼布艺术+桌游教学',
     knowledgeBase: `
 ## 1. 核心机制：时间也是资源
@@ -802,6 +815,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 连锁符号是什么？**
   - A: 卡牌上方如果有白色小符号，对应下一时代某些卡牌的免费条件。有这个符号，下时代的对应卡就不花钱。
 `,
+    commonQuestions: ['三种胜利是什么？', '军事胜利怎么触发？', '科技胜利怎么触发？', '怎么买缺的资源？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=七大奇迹对决+桌游教学',
     knowledgeBase: `
 ## 1. 三种获胜方式
@@ -843,6 +857,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 手牌上限？**
   - A: 7张（不包括骆驼）。
 `,
+    commonQuestions: ['怎么拿货？', '贵重品能卖一张吗？', '骆驼算手牌吗？', '骆驼最多有什么用？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=杰普尔+桌游教学',
     knowledgeBase: `
 ## 1. 回合行动（二选一）
@@ -983,6 +998,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 必须放吗？**
   - A: 必须。投完骰子后必须选一组放上去，即使那个赌场是空的或者你不想要。
 `,
+    commonQuestions: ['骰子怎么放？', '平手怎么结算？', '必须放骰子吗？', '赌场怎么分钱？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=拉斯维加斯+桌游教学',
     knowledgeBase: `
 ## 1. 游戏流程
@@ -1027,6 +1043,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 在东京里掷出红心能留着出城回吗？**
   - A: 不能。在东京里红心就是废面（除非有特殊卡）。
 `,
+    commonQuestions: ['怎么赢？', '东京里能回血吗？', '谁打谁？', '什么时候能撤退？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=东京之王+桌游教学',
     knowledgeBase: `
 ## 1. 两种胜利
@@ -1076,6 +1093,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 收走的牌能加入手牌吗？**
   - A: 不能。放在一边作为计分堆。手牌打完游戏结束。
 `,
+    commonQuestions: ['牌接哪一排？', '第6张怎么办？', '比所有牌都小怎么办？', '牛头怎么算分？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=谁是牛头王+桌游教学',
     knowledgeBase: `
 ## 1. 出牌规则
@@ -1122,6 +1140,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 筹码算多少分？**
   - A: 每个筹码抵消1分（+1分）。
 `,
+    commonQuestions: ['没筹码怎么办？', '连号怎么算分？', '筹码算多少分？', '为什么顺子可能断？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=不谢谢+桌游教学',
     knowledgeBase: `
 ## 1. 核心机制
@@ -1162,7 +1181,13 @@ const RAW_GAME_DATABASE: Game[] = [
       flow: '- **计划**：大家轮流打出行动卡（移动、爬楼、开枪、揍人、抢劫），形成一个指令堆。\n- **执行**：行动堆翻转，按顺序执行。你不能改变已经打出的计划。\n- **混乱**：如果有人用"揍人"把你击退，你原来的计划可能就会对着空气乱打。',
       tips: '> 这是一个编程与混乱的游戏。\n\n- **神枪手**：把子弹打光的人有1000$额外奖励。\n- **子弹**：被打中会污染牌库，让你下回合动作变少。'
     },
-    FAQ: ``,
+    FAQ: `
+- **Q: 计划阶段打出的牌还能改吗？**
+  - A: 不能。执行阶段按计划牌堆顺序播放，行动会因为位置变化而落空或打错目标。
+- **Q: 遇到警长会怎样？**
+  - A: 会被打一枪，拿一张子弹废牌，并被赶到车顶上。
+`,
+    commonQuestions: ['计划牌能改吗？', '警长怎么结算？', '子弹有什么影响？', '神枪手奖励怎么算？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=柯尔特快车+桌游教学',
     knowledgeBase: `
 ## 1. 编程机制
@@ -1203,7 +1228,13 @@ const RAW_GAME_DATABASE: Game[] = [
       flow: '- **下注**：每人盖牌。觉得够了就开始叫价（"我能翻3张花！"）。\n- **挑战**：叫价最高者必须翻开对应数量的牌。先翻自己的，再翻别人的。\n- **爆炸**：如果翻到了**骷髅**，挑战失败，随机失去一张手牌。',
       tips: '> 只有四张牌的心理博弈。\n\n- **诈唬**：即使你盖了骷髅，也可以喊高价，诱导别人去挑战你（然后踩你的雷）。'
     },
-    FAQ: ``,
+    FAQ: `
+- **Q: 挑战时可以先翻别人的牌吗？**
+  - A: 不可以。挑战者必须先翻开自己面前所有盖着的牌，再去翻别人的牌。
+- **Q: 翻到骷髅会怎样？**
+  - A: 挑战立刻失败，停止翻牌，并随机永久失去自己的一张手牌。
+`,
+    commonQuestions: ['怎么叫价？', '挑战先翻谁？', '翻到骷髅怎么办？', '怎么获胜？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=骷髅牌+桌游教学',
     knowledgeBase: `
 ## 1. 每个人只有4张牌
@@ -1248,6 +1279,7 @@ const RAW_GAME_DATABASE: Game[] = [
 - **Q: 如果所有人都被侍女保护了，我一定要出攻击牌怎么办？**
   - A: 如果必须指定对象（如王子），则对自己用。如果不能对自己用（如国王/男爵），则打出无效。
 `,
+    commonQuestions: ['每回合怎么行动？', '卫兵能猜卫兵吗？', '伯爵夫人什么时候必须出？', '公主弃掉会怎样？'],
     tutorialVideoUrl: 'https://search.bilibili.com/all?keyword=情书+桌游教学',
     knowledgeBase: `
 ## 1. 极简流程
@@ -1919,7 +1951,7 @@ const RAW_GAME_DATABASE: Game[] = [
   },
   {
     id: 'scout',
-    titleCn: 'Scout',
+    titleCn: '星探！',
     titleEn: 'SCOUT!',
     bilibiliId: 'BV1KeS3BYEyy',
     coverUrl: '/game-covers/scout.svg',

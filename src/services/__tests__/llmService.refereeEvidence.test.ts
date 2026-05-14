@@ -5,6 +5,7 @@ import { getLLMResponse, initLLMConfig } from '../llmService';
 
 describe('llmService referee evidence guardrail', () => {
   const activeGame = GAME_DATABASE.find((game) => game.id === 'uno');
+  const halliGalli = GAME_DATABASE.find((game) => game.id === 'halli-galli');
 
   beforeEach(() => {
     initLLMConfig();
@@ -90,7 +91,7 @@ describe('llmService referee evidence guardrail', () => {
       [],
     );
 
-    expect(result.text).toContain('**赢法很直接：**');
+    expect(result.text).toContain('**赢法其实就一句话：**');
     expect(result.text).toContain('最先出完手牌');
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -174,5 +175,51 @@ describe('llmService referee evidence guardrail', () => {
     expect(result.switchMode).toBe(true);
     expect(result.text).toContain('换个模式');
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/api/rag'))).toBe(false);
+  });
+
+  it('keeps referee fallback answer natural when upstream LLM is unavailable', async () => {
+    expect(halliGalli).toBeDefined();
+
+    (globalThis.fetch as any).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/rag')) {
+        return {
+          ok: true,
+          json: async () => ({
+            hits: [
+              {
+                chunk_id: 'halli-galli:faq:1',
+                document_id: 'halli-galli',
+                title: '德国心脏病',
+                text: '- **Q: 两个人同时拍怎么办？**\n  - A: 手在下面（最先接触铃铛）的人赢。',
+                section_title: '常见问题',
+                distance: 0.05,
+                score: 0.96,
+                metadata: { game_id: 'halli-galli' },
+              },
+            ],
+          }),
+        } as Response;
+      }
+
+      if (url.includes('/api/chat')) {
+        throw new Error('upstream temporarily unavailable');
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    const result = await getLLMResponse(
+      '两个人同时拍怎么办？',
+      'referee',
+      halliGalli,
+      [],
+      [],
+    );
+
+    expect(result.text).toContain('手在下面');
+    expect(result.text).not.toContain('你可以试着问我');
+    expect(result.text).not.toContain('目标：');
   });
 });

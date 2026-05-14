@@ -49,6 +49,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
+  isStreaming?: boolean;
   gameCard?: Game;
   batchCards?: Game[];
   quickChips?: string[];

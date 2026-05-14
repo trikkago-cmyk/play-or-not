@@ -2605,7 +2605,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "tipperary",
-    "titleCn": "Tipperary",
+    "titleCn": "蒂珀雷里",
     "titleEn": "Tipperary",
     "coverUrl": "/game-covers/tipperary.png",
     "minPlayers": 2,
@@ -2961,7 +2961,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "boop",
-    "titleCn": "boop.",
+    "titleCn": "猫咪碰碰",
     "titleEn": "boop.",
     "coverUrl": "/game-covers/boop.png",
     "minPlayers": 2,
@@ -3001,7 +3001,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "keyflower",
-    "titleCn": "Keyflower",
+    "titleCn": "大五月花号",
     "titleEn": "Keyflower",
     "coverUrl": "/game-covers/keyflower.png",
     "minPlayers": 2,
@@ -3570,7 +3570,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "similo",
-    "titleCn": "Similo",
+    "titleCn": "线索灵犀",
     "titleEn": "Similo",
     "coverUrl": "/game-covers/similo.png",
     "minPlayers": 2,
@@ -3892,7 +3892,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "sagani",
-    "titleCn": "Sagani",
+    "titleCn": "萨迦尼",
     "titleEn": "Sagani",
     "coverUrl": "/game-covers/sagani.png",
     "minPlayers": 1,
@@ -5856,7 +5856,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "secretmoon",
-    "titleCn": "Secret Moon",
+    "titleCn": "秘密月亮",
     "titleEn": "Secret Moon",
     "coverUrl": "/game-covers/secretmoon.png",
     "minPlayers": 5,
@@ -5936,7 +5936,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "geekoutmasters",
-    "titleCn": "Geek Out! Masters",
+    "titleCn": "极客大比拼：大师版",
     "titleEn": "Geek Out! Masters",
     "coverUrl": "/game-covers/geekoutmasters.png",
     "minPlayers": 1,
@@ -5976,7 +5976,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "pixies",
-    "titleCn": "Pixies",
+    "titleCn": "小精灵",
     "titleEn": "Pixies",
     "coverUrl": "/game-covers/pixies.png",
     "minPlayers": 2,
@@ -6016,7 +6016,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "lineit",
-    "titleCn": "Line It",
+    "titleCn": "排列成线",
     "titleEn": "Line It",
     "coverUrl": "/game-covers/lineit.png",
     "minPlayers": 2,
@@ -6096,7 +6096,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "lostexplorers",
-    "titleCn": "Lost Explorers",
+    "titleCn": "迷失探险家",
     "titleEn": "Lost Explorers",
     "coverUrl": "/game-covers/lostexplorers.png",
     "minPlayers": 2,
@@ -6176,7 +6176,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "iwari",
-    "titleCn": "Iwari",
+    "titleCn": "伊瓦里",
     "titleEn": "Iwari",
     "coverUrl": "/game-covers/iwari.png",
     "minPlayers": 2,
@@ -6495,7 +6495,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "quarto",
-    "titleCn": "Quarto",
+    "titleCn": "四重奏棋",
     "titleEn": "Quarto",
     "coverUrl": "/game-covers/quarto.png",
     "minPlayers": 2,
@@ -6772,7 +6772,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "euchre",
-    "titleCn": "Euchre",
+    "titleCn": "尤克牌",
     "titleEn": "Euchre",
     "coverUrl": "/game-covers/euchre.png",
     "minPlayers": 1,
@@ -6932,7 +6932,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "arctic",
-    "titleCn": "Arctic",
+    "titleCn": "北极",
     "titleEn": "Arctic",
     "coverUrl": "/game-covers/arctic.png",
     "minPlayers": 2,
@@ -7376,7 +7376,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "neom",
-    "titleCn": "NEOM",
+    "titleCn": "新经济之城",
     "titleEn": "Neom",
     "coverUrl": "/game-covers/neom.png",
     "minPlayers": 1,
@@ -7458,7 +7458,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "afterus",
-    "titleCn": "After Us",
+    "titleCn": "在我们之后",
     "titleEn": "After Us",
     "coverUrl": "/game-covers/afterus.png",
     "minPlayers": 2,
@@ -7540,7 +7540,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "crusadersthywillbedone",
-    "titleCn": "Crusaders: Thy Will Be Done",
+    "titleCn": "十字军：遵主旨意",
     "titleEn": "Crusaders: Thy Will Be Done",
     "coverUrl": "/game-covers/crusadersthywillbedone.png",
     "minPlayers": 2,
@@ -7702,7 +7702,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "bang",
-    "titleCn": "BANG!",
+    "titleCn": "砰！",
     "titleEn": "BANG!",
     "coverUrl": "/game-covers/bang.png",
     "minPlayers": 4,
@@ -8069,7 +8069,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "spookytower",
-    "titleCn": "Spooky Tower",
+    "titleCn": "幽灵高塔",
     "titleEn": "Spooky Tower",
     "coverUrl": "/game-covers/spookytower.png",
     "minPlayers": 2,
@@ -9497,7 +9497,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "k2",
-    "titleCn": "K2",
+    "titleCn": "K2雪峰",
     "titleEn": "K2",
     "coverUrl": "/game-covers/k2.png",
     "minPlayers": 2,
@@ -9538,7 +9538,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "botanicus",
-    "titleCn": "Botanicus",
+    "titleCn": "植梦花园",
     "titleEn": "Botanicus",
     "coverUrl": "/game-covers/botanicus.png",
     "minPlayers": 2,
@@ -9660,7 +9660,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "mindup",
-    "titleCn": "Mind Up!",
+    "titleCn": "心念排序",
     "titleEn": "Mind Up!",
     "coverUrl": "/game-covers/mindup.png",
     "minPlayers": 3,
@@ -9701,7 +9701,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "solstis",
-    "titleCn": "Solstis",
+    "titleCn": "至日",
     "titleEn": "Solstis",
     "coverUrl": "/game-covers/solstis.png",
     "minPlayers": 2,
@@ -9947,7 +9947,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "qawale",
-    "titleCn": "Qawale",
+    "titleCn": "卡瓦勒",
     "titleEn": "Qawale",
     "coverUrl": "/game-covers/qawale.png",
     "minPlayers": 2,
@@ -10067,7 +10067,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "soluna",
-    "titleCn": "Soluna",
+    "titleCn": "日月棋",
     "titleEn": "Soluna",
     "coverUrl": "/game-covers/soluna.png",
     "minPlayers": 2,
@@ -10227,7 +10227,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "quibbles",
-    "titleCn": "Quibbles",
+    "titleCn": "小吵牌",
     "titleEn": "Quibbles",
     "coverUrl": "/game-covers/quibbles.png",
     "minPlayers": 1,
@@ -10953,7 +10953,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "boreal",
-    "titleCn": "Boreal",
+    "titleCn": "北境",
     "titleEn": "Boreal",
     "coverUrl": "/game-covers/boreal.png",
     "minPlayers": 2,
@@ -11519,7 +11519,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "qwinto",
-    "titleCn": "Qwinto",
+    "titleCn": "昆托",
     "titleEn": "Qwinto",
     "coverUrl": "/game-covers/qwinto.png",
     "minPlayers": 2,
@@ -11557,7 +11557,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "coffeerush",
-    "titleCn": "Coffee Rush",
+    "titleCn": "咖啡狂热",
     "titleEn": "Coffee Rush",
     "coverUrl": "/game-covers/coffeerush.png",
     "minPlayers": 2,
@@ -11596,7 +11596,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "myshelfie",
-    "titleCn": "My Shelfie",
+    "titleCn": "书柜、植栽、我的猫",
     "titleEn": "My Shelfie",
     "coverUrl": "/game-covers/myshelfie.png",
     "minPlayers": 2,
@@ -11675,7 +11675,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "nextstation",
-    "titleCn": "Next Station: London",
+    "titleCn": "下一站：伦敦",
     "titleEn": "Next Station: London",
     "coverUrl": "/game-covers/nextstation.png",
     "minPlayers": 1,
@@ -12232,7 +12232,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "odin",
-    "titleCn": "Odin",
+    "titleCn": "奥丁",
     "titleEn": "Odin",
     "coverUrl": "/game-covers/odin.png",
     "minPlayers": 2,
@@ -12352,7 +12352,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "cubosaurs",
-    "titleCn": "Cubosaurs",
+    "titleCn": "方块恐龙",
     "titleEn": "Cubosaurs",
     "coverUrl": "/game-covers/cubosaurs.png",
     "minPlayers": 2,
@@ -12432,7 +12432,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "lielow",
-    "titleCn": "Lielow",
+    "titleCn": "谎言高低",
     "titleEn": "Lielow",
     "coverUrl": "/game-covers/lielow.png",
     "minPlayers": 2,
@@ -12511,7 +12511,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "thirteenclues",
-    "titleCn": "13 Clues",
+    "titleCn": "13道线索",
     "titleEn": "13 Clues",
     "coverUrl": "/game-covers/thirteenclues.png",
     "minPlayers": 2,
@@ -12828,7 +12828,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "romirami",
-    "titleCn": "Romi Rami",
+    "titleCn": "罗米拉米",
     "titleEn": "Romi Rami",
     "coverUrl": "/game-covers/romirami.png",
     "minPlayers": 2,
@@ -12868,7 +12868,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "rollandbump",
-    "titleCn": "Roll'n Bump",
+    "titleCn": "掷骰撞撞",
     "titleEn": "Roll'n Bump",
     "coverUrl": "/game-covers/rollandbump.png",
     "minPlayers": 2,
@@ -12988,7 +12988,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "knister",
-    "titleCn": "Knister",
+    "titleCn": "闪点骰阵",
     "titleEn": "Knister",
     "coverUrl": "/game-covers/knister.png",
     "minPlayers": 1,
@@ -13109,7 +13109,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "strands",
-    "titleCn": "Strands",
+    "titleCn": "线索拼词",
     "titleEn": "Strands",
     "coverUrl": "/game-covers/strands.png",
     "minPlayers": 2,
@@ -13188,7 +13188,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "microdojo",
-    "titleCn": "Micro Dojo",
+    "titleCn": "微型道场",
     "titleEn": "Micro Dojo",
     "coverUrl": "/game-covers/microdojo.png",
     "minPlayers": 2,
@@ -13227,7 +13227,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "capereurope",
-    "titleCn": "Caper: Europe",
+    "titleCn": "欧洲妙贼",
     "titleEn": "Caper: Europe",
     "coverUrl": "/game-covers/capereurope.png",
     "minPlayers": 2,
@@ -13346,7 +13346,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "mutantcrops",
-    "titleCn": "Mutant Crops",
+    "titleCn": "变异作物",
     "titleEn": "Mutant Crops",
     "coverUrl": "/game-covers/mutantcrops.png",
     "minPlayers": 1,
@@ -13386,7 +13386,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "goldblivion",
-    "titleCn": "GOLDblivion",
+    "titleCn": "金矿遗迹",
     "titleEn": "GOLDblivion",
     "coverUrl": "/game-covers/goldblivion.png",
     "minPlayers": 1,
@@ -13426,7 +13426,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "greatsplit",
-    "titleCn": "The Great Split",
+    "titleCn": "大分配",
     "titleEn": "The Great Split",
     "coverUrl": "/game-covers/greatsplit.png",
     "minPlayers": 2,
@@ -13506,7 +13506,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "tinyfarms",
-    "titleCn": "Tiny Farms",
+    "titleCn": "迷你农场",
     "titleEn": "Tiny Farms",
     "coverUrl": "/game-covers/tinyfarms.png",
     "minPlayers": 2,
@@ -13587,7 +13587,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "fliptoons",
-    "titleCn": "FlipToons",
+    "titleCn": "翻翻卡通",
     "titleEn": "FlipToons",
     "coverUrl": "/game-covers/fliptoons.png",
     "minPlayers": 1,
@@ -13667,7 +13667,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "wispwood",
-    "titleCn": "Wispwood",
+    "titleCn": "幽光森林",
     "titleEn": "Wispwood",
     "coverUrl": "/game-covers/wispwood.png",
     "minPlayers": 2,
@@ -13787,7 +13787,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "dewan",
-    "titleCn": "Dewan",
+    "titleCn": "德万",
     "titleEn": "Dewan",
     "coverUrl": "/game-covers/dewan.png",
     "minPlayers": 2,
@@ -13948,7 +13948,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "draftandwriterecords",
-    "titleCn": "Draft & Write Records",
+    "titleCn": "选牌写唱片",
     "titleEn": "Draft & Write Records",
     "coverUrl": "/game-covers/draftandwriterecords.png",
     "minPlayers": 1,
@@ -14070,7 +14070,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "miams",
-    "titleCn": "Miams",
+    "titleCn": "美味小吃",
     "titleEn": "Miams",
     "coverUrl": "/game-covers/miams.png",
     "minPlayers": 1,
@@ -14110,7 +14110,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "agentavenue",
-    "titleCn": "Agent Avenue",
+    "titleCn": "特工大道",
     "titleEn": "Agent Avenue",
     "coverUrl": "/game-covers/agentavenue.png",
     "minPlayers": 2,
@@ -14149,7 +14149,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "tacta",
-    "titleCn": "Tacta",
+    "titleCn": "战术方阵",
     "titleEn": "Tacta",
     "coverUrl": "/game-covers/tacta.png",
     "minPlayers": 2,
@@ -14270,7 +14270,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "myshelfiedice",
-    "titleCn": "My Shelfie: The Dice Game",
+    "titleCn": "书柜、植栽、我的猫：骰子版",
     "titleEn": "My Shelfie: The Dice Game",
     "coverUrl": "/game-covers/myshelfiedice.png",
     "minPlayers": 2,
@@ -14469,7 +14469,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "jurassicsnack",
-    "titleCn": "Jurassic Snack",
+    "titleCn": "恐龙小吃",
     "titleEn": "Jurassic Snack",
     "coverUrl": "/game-covers/jurassicsnack.png",
     "minPlayers": 2,
@@ -14669,7 +14669,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "verso",
-    "titleCn": "Verso",
+    "titleCn": "反转牌",
     "titleEn": "Verso",
     "coverUrl": "/game-covers/verso.png",
     "minPlayers": 1,
@@ -14711,7 +14711,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "pocketcats",
-    "titleCn": "Pocket Cats",
+    "titleCn": "口袋猫猫",
     "titleEn": "Pocket Cats",
     "coverUrl": "/game-covers/pocketcats.png",
     "minPlayers": 2,
@@ -14751,7 +14751,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "dicycards",
-    "titleCn": "Dicy Cards",
+    "titleCn": "骰子卡牌",
     "titleEn": "Dicy Cards",
     "coverUrl": "/game-covers/dicycards.png",
     "minPlayers": 2,
@@ -14792,7 +14792,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "pilipili",
-    "titleCn": "Pili Pili",
+    "titleCn": "辣椒派对",
     "titleEn": "Pili Pili",
     "coverUrl": "/game-covers/pilipili.png",
     "minPlayers": 2,
@@ -14956,7 +14956,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "schnapsen",
-    "titleCn": "Schnapsen",
+    "titleCn": "施纳普森",
     "titleEn": "Schnapsen",
     "coverUrl": "/game-covers/schnapsen.png",
     "minPlayers": 2,
@@ -15238,7 +15238,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "fika",
-    "titleCn": "Fika",
+    "titleCn": "菲卡",
     "titleEn": "Fika",
     "coverUrl": "/game-covers/fika.png",
     "minPlayers": 2,
@@ -15319,7 +15319,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "thegang",
-    "titleCn": "The Gang",
+    "titleCn": "怪盗团",
     "titleEn": "The Gang",
     "coverUrl": "/game-covers/thegang.png",
     "minPlayers": 3,
@@ -15522,7 +15522,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "leaders",
-    "titleCn": "Leaders",
+    "titleCn": "领袖",
     "titleEn": "Leaders",
     "coverUrl": "/game-covers/leaders.png",
     "minPlayers": 2,
@@ -15726,7 +15726,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "elawa",
-    "titleCn": "Elawa",
+    "titleCn": "埃拉瓦",
     "titleEn": "Elawa",
     "coverUrl": "/game-covers/elawa.png",
     "minPlayers": 2,
@@ -15767,7 +15767,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "karvi",
-    "titleCn": "Karvi",
+    "titleCn": "卡尔维",
     "titleEn": "Karvi",
     "coverUrl": "/game-covers/karvi.png",
     "minPlayers": 2,
@@ -16052,7 +16052,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "ninjan",
-    "titleCn": "Ninjan",
+    "titleCn": "忍者阵",
     "titleEn": "Ninjan",
     "coverUrl": "/game-covers/ninjan.png",
     "minPlayers": 2,
@@ -16093,7 +16093,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "bandada",
-    "titleCn": "Bandada",
+    "titleCn": "鸟群",
     "titleEn": "Bandada",
     "coverUrl": "/game-covers/bandada.png",
     "minPlayers": 1,
@@ -16174,7 +16174,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "tagteam",
-    "titleCn": "Tag Team",
+    "titleCn": "双打拍档",
     "titleEn": "Tag Team",
     "coverUrl": "/game-covers/tagteam.png",
     "minPlayers": 2,
@@ -16214,7 +16214,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "rolltothetopjourneys",
-    "titleCn": "Roll to the Top: Journeys",
+    "titleCn": "登顶之旅",
     "titleEn": "Roll to the Top: Journeys",
     "coverUrl": "/game-covers/rolltothetopjourneys.png",
     "minPlayers": 1,
@@ -16255,7 +16255,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "dicemission",
-    "titleCn": "Dice Mission",
+    "titleCn": "骰子任务",
     "titleEn": "Dice Mission",
     "coverUrl": "/game-covers/dicemission.png",
     "minPlayers": 2,
@@ -16460,7 +16460,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "matchsticktycoon",
-    "titleCn": "Matchstick Tycoon",
+    "titleCn": "火柴大亨",
     "titleEn": "Matchstick Tycoon",
     "coverUrl": "/game-covers/matchsticktycoon.png",
     "minPlayers": 2,
@@ -16583,7 +16583,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "abrachadabra",
-    "titleCn": "Abra Chadabra",
+    "titleCn": "阿布拉咒语",
     "titleEn": "Abra Chadabra",
     "coverUrl": "/game-covers/abrachadabra.png",
     "minPlayers": 2,
@@ -16746,7 +16746,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "digupadventure",
-    "titleCn": "DIG UP Adventure",
+    "titleCn": "挖宝冒险",
     "titleEn": "DIG UP Adventure",
     "coverUrl": "/game-covers/digupadventure.png",
     "minPlayers": 2,
@@ -16787,7 +16787,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "betta",
-    "titleCn": "Betta",
+    "titleCn": "我的鱼！",
     "titleEn": "Betta",
     "coverUrl": "/game-covers/betta.png",
     "minPlayers": 1,
@@ -16951,7 +16951,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "oxono",
-    "titleCn": "Oxono",
+    "titleCn": "奥克索诺",
     "titleEn": "Oxono",
     "coverUrl": "/game-covers/oxono.png",
     "minPlayers": 2,
@@ -17236,7 +17236,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "yaxha",
-    "titleCn": "Yaxha",
+    "titleCn": "雅克斯哈",
     "titleEn": "Yaxha",
     "coverUrl": "/game-covers/yaxha.png",
     "minPlayers": 2,
@@ -17439,7 +17439,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "twinpalms",
-    "titleCn": "Twin Palms",
+    "titleCn": "双棕榈",
     "titleEn": "Twin Palms",
     "coverUrl": "/game-covers/twinpalms.png",
     "minPlayers": 2,
@@ -17644,7 +17644,7 @@ export const GAME_DATABASE_AUTO_EXPANSION: Game[] = [
   },
   {
     "id": "kamon",
-    "titleCn": "Kamon",
+    "titleCn": "家纹",
     "titleEn": "Kamon",
     "coverUrl": "/game-covers/kamon.png",
     "minPlayers": 2,

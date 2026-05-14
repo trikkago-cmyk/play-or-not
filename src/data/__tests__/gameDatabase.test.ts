@@ -8,6 +8,7 @@ import { GAME_DATABASE_CATALOG_EXPANSION } from '../gameDatabaseCatalogExpansion
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const CJK_TITLE_PATTERN = /[\u3400-\u9fff]/;
 
 describe('gameDatabase cover completeness', () => {
   it('ensures every merged game entry points to a localized coverUrl', () => {
@@ -34,6 +35,48 @@ describe('gameDatabase cover completeness', () => {
     }));
 
     expect(placeholderSvgGames).toEqual([]);
+  });
+});
+
+describe('gameDatabase localization and referee readiness', () => {
+  it('requires user-facing Chinese titles for every shipped game', () => {
+    const untranslatedGames = GAME_DATABASE.filter(
+      (game) => !CJK_TITLE_PATTERN.test(game.titleCn),
+    ).map((game) => ({
+      id: game.id,
+      titleCn: game.titleCn,
+      titleEn: game.titleEn,
+    }));
+
+    expect(untranslatedGames).toEqual([]);
+  });
+
+  it('ensures every full-tier game has structured referee knowledge', () => {
+    const incompleteGames = GAME_DATABASE.filter((game) => {
+      const knowledgeTier = game.knowledgeTier ?? (game.knowledgeBase?.trim() ? 'full' : 'catalog');
+      return (
+        knowledgeTier === 'full' &&
+        (
+          !game.rules?.target?.trim() ||
+          !game.rules?.flow?.trim() ||
+          !game.rules?.tips?.trim() ||
+          !game.FAQ?.trim() ||
+          !(game.commonQuestions ?? []).length ||
+          !game.knowledgeBase?.trim()
+        )
+      );
+    }).map((game) => ({
+      id: game.id,
+      titleCn: game.titleCn,
+      hasTarget: Boolean(game.rules?.target?.trim()),
+      hasFlow: Boolean(game.rules?.flow?.trim()),
+      hasTips: Boolean(game.rules?.tips?.trim()),
+      hasFaq: Boolean(game.FAQ?.trim()),
+      commonQuestionCount: (game.commonQuestions ?? []).length,
+      hasKnowledgeBase: Boolean(game.knowledgeBase?.trim()),
+    }));
+
+    expect(incompleteGames).toEqual([]);
   });
 });
 

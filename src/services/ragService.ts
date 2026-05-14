@@ -1,5 +1,5 @@
 import { GAME_DATABASE } from '@/data/gameDatabase';
-import { getGameRecommendation, getSimilarGames } from './llmService';
+import { getGameRecommendation, getGameRecommendationStream, getSimilarGames } from './llmService';
 import { getPersistentContextForPrompt } from './memoryService';
 import type { Game } from '@/types';
 
@@ -21,6 +21,10 @@ interface DialogueContext {
   turnCount: number;
   lastQuery: string;
   history: { role: 'user' | 'assistant'; content: string }[];
+}
+
+interface DialogueStreamCallbacks {
+  onAnswerUpdate?: (text: string) => void;
 }
 
 function getStructuredTags(game: Game): string[] {
@@ -138,7 +142,13 @@ export class DialogueAgent {
       finalQueryForLLM = `${persistentMemory}\n\n[用户的当前提问]:\n${input}`;
     }
 
-    const result = await getGameRecommendation(finalQueryForLLM, this.sessionGames, this.context.history, mode, activeGame);
+    const result = await getGameRecommendation(
+      finalQueryForLLM,
+      this.sessionGames,
+      this.context.history.slice(0, -1),
+      mode,
+      activeGame,
+    );
 
     if (result.game) {
       if (!this.sessionGames.includes(result.game.id)) {
@@ -162,6 +172,61 @@ export class DialogueAgent {
       context: '',
       answer: result.text,
       switchMode: result.switchMode // 传递切换信号
+    };
+  }
+
+  async processInputStream(
+    input: string,
+    mode: 'recommendation' | 'referee' = 'recommendation',
+    activeGame?: Game,
+    callbacks: DialogueStreamCallbacks = {},
+  ): Promise<RetrievalResult> {
+    this.context.lastQuery = input;
+    this.context.turnCount++;
+    this.context.history.push({ role: 'user', content: input });
+
+    if (this.context.history.length > 20) {
+      this.context.history = this.context.history.slice(-20);
+    }
+
+    const persistentMemory = getPersistentContextForPrompt();
+    let finalQueryForLLM = input;
+
+    if (mode === 'recommendation' && persistentMemory) {
+      finalQueryForLLM = `${persistentMemory}\n\n[用户的当前提问]:\n${input}`;
+    }
+
+    const result = await getGameRecommendationStream(
+      finalQueryForLLM,
+      this.sessionGames,
+      this.context.history.slice(0, -1),
+      mode,
+      activeGame,
+      {
+        onReplyUpdate: callbacks.onAnswerUpdate,
+      },
+    );
+
+    if (result.game) {
+      if (!this.sessionGames.includes(result.game.id)) {
+        this.sessionGames.push(result.game.id);
+      }
+      if (!this.context.mentionedGames.includes(result.game.id)) {
+        this.context.mentionedGames.push(result.game.id);
+      }
+    }
+
+    this.context.history.push({ role: 'assistant', content: result.text });
+
+    const alternativeGames = (mode === 'recommendation' && result.game)
+      ? getSimilarGames(result.game.id, this.sessionGames).slice(0, 3)
+      : [];
+
+    return {
+      games: result.game ? [result.game, ...alternativeGames] : alternativeGames,
+      context: '',
+      answer: result.text,
+      switchMode: result.switchMode,
     };
   }
 

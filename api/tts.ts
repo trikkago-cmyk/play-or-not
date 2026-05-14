@@ -102,13 +102,42 @@ function normalizeBaseUrl(rawBaseUrl?: string, fallback = DEFAULT_TTS_SERVICE_UR
   return (rawBaseUrl || fallback).trim().replace(/\/+$/, '');
 }
 
+function normalizeEnvValue(rawValue?: string) {
+  if (!rawValue) {
+    return '';
+  }
+
+  let normalized = rawValue.trim();
+
+  while (normalized.startsWith('\\n') || normalized.startsWith('\\r')) {
+    normalized = normalized.slice(2).trimStart();
+  }
+
+  while (normalized.endsWith('\\n') || normalized.endsWith('\\r')) {
+    normalized = normalized.slice(0, -2).trimEnd();
+  }
+
+  return normalized;
+}
+
+function readEnvValue(...names: string[]) {
+  for (const name of names) {
+    const value = normalizeEnvValue(process.env[name]);
+    if (value) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
 function resolveProvider() {
-  const explicitProvider = process.env.TTS_PROVIDER?.trim().toLowerCase();
+  const explicitProvider = readEnvValue('TTS_PROVIDER').toLowerCase();
   if (explicitProvider) {
     return explicitProvider;
   }
 
-  if (process.env.TTS_SERVICE_URL?.trim() || process.env.COSYVOICE_TTS_SERVICE_URL?.trim()) {
+  if (readEnvValue('TTS_SERVICE_URL', 'COSYVOICE_TTS_SERVICE_URL')) {
     return 'cosyvoice_service';
   }
 
@@ -116,30 +145,23 @@ function resolveProvider() {
     return 'doubao_tts';
   }
 
-  return process.env.MINIMAX_TTS_API_KEY?.trim() ? 'minimax' : 'disabled';
+  return readEnvValue('MINIMAX_TTS_API_KEY') ? 'minimax' : 'disabled';
 }
 
 function readDoubaoTtsApiKey() {
-  return process.env.DOUBAO_TTS_API_KEY?.trim()
-    || process.env.DOUBAO_VOICE_API_KEY?.trim()
-    || '';
+  return readEnvValue('DOUBAO_TTS_API_KEY', 'DOUBAO_VOICE_API_KEY');
 }
 
 function readDoubaoTtsAppId() {
-  return process.env.DOUBAO_TTS_APP_ID?.trim()
-    || process.env.DOUBAO_VOICE_APP_ID?.trim()
-    || '';
+  return readEnvValue('DOUBAO_TTS_APP_ID', 'DOUBAO_VOICE_APP_ID');
 }
 
 function readDoubaoTtsAccessToken() {
-  return process.env.DOUBAO_TTS_ACCESS_TOKEN?.trim()
-    || process.env.DOUBAO_VOICE_ACCESS_TOKEN?.trim()
-    || '';
+  return readEnvValue('DOUBAO_TTS_ACCESS_TOKEN', 'DOUBAO_VOICE_ACCESS_TOKEN');
 }
 
 function readDoubaoTtsResourceId() {
-  return process.env.DOUBAO_TTS_RESOURCE_ID?.trim()
-    || process.env.DOUBAO_VOICE_RESOURCE_ID?.trim()
+  return readEnvValue('DOUBAO_TTS_RESOURCE_ID', 'DOUBAO_VOICE_RESOURCE_ID')
     || DEFAULT_DOUBAO_TTS_RESOURCE_ID;
 }
 
@@ -391,7 +413,7 @@ function passThroughAudioResponse(response: Response, provider: string, extraHea
 
 async function proxyCosyVoiceService(body: ParsedTtsBody) {
   const baseUrl = normalizeBaseUrl(
-    process.env.TTS_SERVICE_URL || process.env.COSYVOICE_TTS_SERVICE_URL,
+    readEnvValue('TTS_SERVICE_URL', 'COSYVOICE_TTS_SERVICE_URL'),
     DEFAULT_TTS_SERVICE_URL,
   );
 
@@ -440,7 +462,7 @@ async function proxyCosyVoiceService(body: ParsedTtsBody) {
 }
 
 async function proxyMiniMax(body: ParsedTtsBody) {
-  const apiKey = process.env.MINIMAX_TTS_API_KEY?.trim() || '';
+  const apiKey = readEnvValue('MINIMAX_TTS_API_KEY');
   if (!apiKey) {
     return jsonResponse({
       code: 'tts_unconfigured',
@@ -451,16 +473,16 @@ async function proxyMiniMax(body: ParsedTtsBody) {
     });
   }
 
-  const baseUrl = normalizeBaseUrl(process.env.MINIMAX_TTS_BASE_URL, DEFAULT_MINIMAX_BASE_URL);
-  const model = (process.env.MINIMAX_TTS_MODEL || DEFAULT_MINIMAX_MODEL).trim();
-  const voiceId = body.voiceId || (process.env.MINIMAX_TTS_VOICE_ID || DEFAULT_MINIMAX_VOICE_ID).trim();
-  const emotion = body.emotion || (process.env.MINIMAX_TTS_EMOTION || '').trim();
+  const baseUrl = normalizeBaseUrl(readEnvValue('MINIMAX_TTS_BASE_URL'), DEFAULT_MINIMAX_BASE_URL);
+  const model = readEnvValue('MINIMAX_TTS_MODEL') || DEFAULT_MINIMAX_MODEL;
+  const voiceId = body.voiceId || readEnvValue('MINIMAX_TTS_VOICE_ID') || DEFAULT_MINIMAX_VOICE_ID;
+  const emotion = body.emotion || readEnvValue('MINIMAX_TTS_EMOTION');
 
-  const speed = parseBoundedNumber(body.speed ?? process.env.MINIMAX_TTS_SPEED, DEFAULT_SPEED, 0.5, 2);
-  const volume = parseBoundedNumber(process.env.MINIMAX_TTS_VOLUME, DEFAULT_VOLUME, 0.1, 10);
-  const pitch = parseBoundedNumber(process.env.MINIMAX_TTS_PITCH, DEFAULT_PITCH, -12, 12);
-  const sampleRate = parseBoundedNumber(process.env.MINIMAX_TTS_SAMPLE_RATE, DEFAULT_SAMPLE_RATE, 8000, 48000);
-  const bitrate = parseBoundedNumber(process.env.MINIMAX_TTS_BITRATE, DEFAULT_BITRATE, 32000, 320000);
+  const speed = parseBoundedNumber(body.speed ?? readEnvValue('MINIMAX_TTS_SPEED'), DEFAULT_SPEED, 0.5, 2);
+  const volume = parseBoundedNumber(readEnvValue('MINIMAX_TTS_VOLUME'), DEFAULT_VOLUME, 0.1, 10);
+  const pitch = parseBoundedNumber(readEnvValue('MINIMAX_TTS_PITCH'), DEFAULT_PITCH, -12, 12);
+  const sampleRate = parseBoundedNumber(readEnvValue('MINIMAX_TTS_SAMPLE_RATE'), DEFAULT_SAMPLE_RATE, 8000, 48000);
+  const bitrate = parseBoundedNumber(readEnvValue('MINIMAX_TTS_BITRATE'), DEFAULT_BITRATE, 32000, 320000);
 
   const requestBody = {
     model,
@@ -552,28 +574,28 @@ async function proxyDoubaoTts(body: ParsedTtsBody) {
     });
   }
 
-  const voiceType = body.voiceId || (process.env.DOUBAO_TTS_VOICE_TYPE || DEFAULT_DOUBAO_TTS_VOICE_TYPE).trim();
-  const audioEncoding = ((process.env.DOUBAO_TTS_ENCODING || DEFAULT_DOUBAO_TTS_ENCODING).trim().toLowerCase()
+  const voiceType = body.voiceId || readEnvValue('DOUBAO_TTS_VOICE_TYPE') || DEFAULT_DOUBAO_TTS_VOICE_TYPE;
+  const audioEncoding = ((readEnvValue('DOUBAO_TTS_ENCODING') || DEFAULT_DOUBAO_TTS_ENCODING).toLowerCase()
     || DEFAULT_DOUBAO_TTS_ENCODING);
   const sampleRate = parseBoundedNumber(
-    process.env.DOUBAO_TTS_SAMPLE_RATE,
+    readEnvValue('DOUBAO_TTS_SAMPLE_RATE'),
     DEFAULT_DOUBAO_TTS_SAMPLE_RATE,
     8000,
     48000,
   );
-  const speedRatio = parseBoundedNumber(body.speed ?? process.env.DOUBAO_TTS_SPEED, DEFAULT_SPEED, 0.5, 2);
-  const volumeRatio = parseBoundedNumber(process.env.DOUBAO_TTS_VOLUME, DEFAULT_VOLUME, 0.1, 3);
-  const pitchRatio = parseBoundedNumber(process.env.DOUBAO_TTS_PITCH, 1, 0.5, 2);
+  const speedRatio = parseBoundedNumber(body.speed ?? readEnvValue('DOUBAO_TTS_SPEED'), DEFAULT_SPEED, 0.5, 2);
+  const volumeRatio = parseBoundedNumber(readEnvValue('DOUBAO_TTS_VOLUME'), DEFAULT_VOLUME, 0.1, 3);
+  const pitchRatio = parseBoundedNumber(readEnvValue('DOUBAO_TTS_PITCH'), 1, 0.5, 2);
   const timeoutMs = parseBoundedNumber(
-    process.env.DOUBAO_TTS_TIMEOUT_MS,
+    readEnvValue('DOUBAO_TTS_TIMEOUT_MS'),
     DEFAULT_DOUBAO_TTS_TIMEOUT_MS,
     3000,
     45000,
   );
   const resourceId = readDoubaoTtsResourceId();
-  const userId = (process.env.DOUBAO_TTS_USER_ID || 'play-or-not-dm').trim();
+  const userId = readEnvValue('DOUBAO_TTS_USER_ID') || 'play-or-not-dm';
   const endpointUrl = new URL(
-    `${normalizeBaseUrl(process.env.DOUBAO_TTS_BASE_URL, DEFAULT_DOUBAO_TTS_API_BASE_URL)}${DEFAULT_DOUBAO_TTS_ENDPOINT_PATH}`,
+    `${normalizeBaseUrl(readEnvValue('DOUBAO_TTS_BASE_URL'), DEFAULT_DOUBAO_TTS_API_BASE_URL)}${DEFAULT_DOUBAO_TTS_ENDPOINT_PATH}`,
   );
   const reqId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -660,9 +682,9 @@ async function proxyDoubaoTts(body: ParsedTtsBody) {
 function getTtsStatus() {
   const provider = resolveProvider();
   const hasCosyVoiceServiceUrl = Boolean(
-    process.env.TTS_SERVICE_URL?.trim() || process.env.COSYVOICE_TTS_SERVICE_URL?.trim(),
+    readEnvValue('TTS_SERVICE_URL', 'COSYVOICE_TTS_SERVICE_URL'),
   );
-  const hasMiniMaxApiKey = Boolean(process.env.MINIMAX_TTS_API_KEY?.trim());
+  const hasMiniMaxApiKey = Boolean(readEnvValue('MINIMAX_TTS_API_KEY'));
   const hasDoubaoTtsConfig = hasDoubaoTtsConfiguredEnv();
 
   if (provider === 'cosyvoice_service' || provider === 'tts_service') {
@@ -678,7 +700,7 @@ function getTtsStatus() {
       current_provider: 'doubao_tts',
       server_provider_configured: hasDoubaoTtsConfig,
       upstream_healthy: hasDoubaoTtsConfig,
-      current_voice_id: (process.env.DOUBAO_TTS_VOICE_TYPE || DEFAULT_DOUBAO_TTS_VOICE_TYPE).trim(),
+      current_voice_id: readEnvValue('DOUBAO_TTS_VOICE_TYPE') || DEFAULT_DOUBAO_TTS_VOICE_TYPE,
     };
   }
 
