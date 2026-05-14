@@ -412,3 +412,11 @@
     - `npm exec tsc -- -p tsconfig.app.json --noEmit` passed
     - `npm test` passed: `15 files / 102 tests`
     - `npm run build` passed, with only the existing Vite large chunk warning
+  - Preview deployment:
+    - `https://play-or-not-jpcvuq96j-trikkagos-projects.vercel.app`
+    - Vercel inspect confirms `target: preview`, `status: Ready`
+    - home page returns `200`
+    - frontend serves the freshly built `assets/index-CGWUgaPV.js`
+    - plain `/api/chat` returns `200`, `x-llm-model: deepseek-v3-2-251201`, `x-llm-upstream-format: ark_responses`
+    - a no-tools referee-style `/api/chat` smoke returns no `x-llm-web-search` header, confirming the default runtime path no longer requests paid Ark Web Search
+    - production was not promoted
