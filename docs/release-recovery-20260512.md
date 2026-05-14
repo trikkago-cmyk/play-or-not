@@ -242,6 +242,10 @@
   - Passed after full recommendation-session memory hardening: `15 files / 97 tests`
 - `npm run build`
   - Passed after full recommendation-session memory hardening, with only the existing Vite large chunk warning
+- Preview smoke for `https://play-or-not-1uml2ku8f-trikkagos-projects.vercel.app`
+  - `GET /` returned `200`
+  - `POST /api/chat` non-stream returned `200`, `x-llm-model: deepseek-v3-2-251201`, `x-llm-upstream-format: ark_responses`
+  - `POST /api/chat` with `stream: true` returned `200`, `content-type: text/event-stream`, `x-llm-upstream-format: ark_responses`
 
 ## Preview
 
@@ -265,6 +269,8 @@
   - `https://play-or-not-1q5kjsc8u-trikkagos-projects.vercel.app`
 - New preview after session-intent inheritance fix for `换一个`:
   - `https://play-or-not-1rrkrz4nk-trikkagos-projects.vercel.app`
+- New preview after full recommendation-session memory hardening:
+  - `https://play-or-not-1uml2ku8f-trikkagos-projects.vercel.app`
 - Smoke checks:
   - preview `/api/chat` returns `model: deepseek-v3-2-251201` when explicitly targeted
   - preview `/api/chat` still returns normalized `choices[0].message.content`
