@@ -215,6 +215,14 @@
   - Passed after structured local wiki migration: `14 files / 92 tests`
 - `npm run build`
   - Passed after structured local wiki migration, with only the existing Vite large chunk warning
+- `npm exec tsc -- -p tsconfig.app.json --noEmit`
+  - Passed during final release-branch gate on `2026-05-14`
+- `npm test`
+  - Passed during final release-branch gate: `14 files / 92 tests`
+- `npm run build`
+  - Passed during final release-branch gate, with only the existing Vite large chunk warning
+- `npm run kb:validate`
+  - Passed during final release-branch gate: `500 games, 1000 docs, 500 recommendations, 5000 clean sections`
 
 ## Preview
 
@@ -234,6 +242,8 @@
   - `https://play-or-not-9ic261sdg-trikkagos-projects.vercel.app`
 - New preview after Python RAG mainline wiring + query-derived hard-filter defense:
   - `https://play-or-not-mkrsd6vz4-trikkagos-projects.vercel.app`
+- New preview after switching the production recommendation / referee path to structured local wiki retrieval:
+  - `https://play-or-not-1q5kjsc8u-trikkagos-projects.vercel.app`
 - Smoke checks:
   - preview `/api/chat` returns `model: deepseek-v3-2-251201` when explicitly targeted
   - preview `/api/chat` still returns normalized `choices[0].message.content`
@@ -290,6 +300,25 @@
   - explicit hard-filter recommendation query `九人局家庭聚会，来个轻松点的` returned `uno`, `supermegaluckybox`, `flipseven`; all hits satisfy players/time/complexity/age constraints
   - derived hard-filter recommendation query `九人局家庭聚会，30分钟内，规则简单，8岁孩子也能玩` returned `uno`, `supermegaluckybox`, `flipseven`; all hits satisfy query-derived players/time/complexity/age constraints
   - referee query `阿瓦隆 刺客什么时候刺杀` returned only `avalon` hits
+  - production was not promoted
+- Latest preview smoke checks on `https://play-or-not-1q5kjsc8u-trikkagos-projects.vercel.app`:
+  - deployment ready state: `READY`
+  - Vercel inspect confirms `target: preview`
+  - home page returns `200`
+  - plain `POST /api/chat` with `你好，洛思` returns `200`
+  - response headers confirm `x-llm-model: deepseek-v3-2-251201`
+  - response headers confirm `x-llm-upstream-format: ark_responses`
+  - greeting response stays short and does not force a recommendation card path
+  - `POST /api/chat` with `stream: true` returns Ark SSE successfully
+  - direct stream smoke does not include reasoning delta events; only usage metadata includes `reasoning_tokens`
+  - `/api/rag` derived hard-filter query `九人局家庭聚会，30分钟内，规则简单，8岁孩子也能玩` returned only hits satisfying players/time/complexity/age constraints
+  - `/api/rag` referee query scoped to `game_id: avalon` returned only `avalon` hits
+  - `GET /api/tts` reports `current_provider: doubao_tts`
+  - `GET /api/tts` reports `current_voice_id: zh_female_tianmeixiaoyuan_uranus_bigtts`
+  - `POST /api/tts` returns `200`, `audio/mpeg`, `x-tts-provider: doubao_tts`, and `x-tts-voice-id: zh_female_tianmeixiaoyuan_uranus_bigtts`
+  - `POST /api/stt` with real generated Mandarin audio returns `200`
+  - preview STT currently uses `x-stt-fallback: production-proxy` because Preview STT secrets are absent
+  - Vercel error logs for the preview deployment show no error entries in the checked window
   - production was not promoted
 - Historical blocker observed on an earlier preview:
   - `POST /api/chat` with `stream: false` returned `504 FUNCTION_INVOCATION_TIMEOUT`
