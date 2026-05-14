@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type MouseEvent } from 'react';
 import { Send, History, User, ChevronLeft, ChevronRight, MessageSquarePlus, Scale, Mic, Volume2, VolumeX } from 'lucide-react';
-import type { Game, ChatMessage } from '@/types';
+import type { ChatMode, DialogueSessionMemory, Game, ChatMessage } from '@/types';
 import GameCard from '@/components/GameCard';
 import MiniGameCard from '@/components/MiniGameCard';
 import { dialogueAgent, isRefereeRecommendationSwitchRequest } from '@/services/ragService';
@@ -16,8 +16,16 @@ interface ChatPageProps {
   onNavigateToGameDetail: (gameId: string) => void;
   onNavigateToHistory: () => void;
   initialMessages?: ChatMessage[];
+  initialMode?: ChatMode;
+  initialActiveGameId?: string | null;
+  initialDialogueState?: DialogueSessionMemory;
   hasStarted: boolean;
   onMessagesUpdate?: (messages: ChatMessage[]) => void;
+  onSessionMemoryUpdate?: (updates: {
+    dialogueState?: DialogueSessionMemory;
+    mode?: ChatMode;
+    activeGameId?: string | null;
+  }) => void;
   onChatStarted: () => void;
   onNewSession: () => void;
   userAvatar: string;
@@ -34,6 +42,7 @@ type StreamedSpeechQueueItem = {
   status: 'queued' | 'preparing' | 'ready' | 'playing' | 'done' | 'failed';
   preparedPlayback: PreparedDmTtsPlayback | null;
   preparePromise: Promise<PreparedDmTtsPlayback | null> | null;
+  prepareAbortController: AbortController | null;
 };
 
 type StreamedSpeechQueueState = {
@@ -90,8 +99,12 @@ export default function ChatPage({
   onNavigateToGameDetail,
   onNavigateToHistory,
   initialMessages,
+  initialMode,
+  initialActiveGameId,
+  initialDialogueState,
   hasStarted,
   onMessagesUpdate,
+  onSessionMemoryUpdate,
   onChatStarted,
   onNewSession,
   targetRefereeGameId,
@@ -127,8 +140,13 @@ export default function ChatPage({
   // -------------------------------------------
 
   // 模式状态：推荐模式或裁判模式
-  const [mode, setMode] = useState<'recommendation' | 'referee'>('recommendation');
-  const [activeGame, setActiveGame] = useState<Game | null>(null);
+  const initialActiveGame = initialActiveGameId
+    ? mockGames.find((game) => game.id === initialActiveGameId) ?? null
+    : null;
+  const [mode, setMode] = useState<ChatMode>(
+    initialMode === 'referee' && initialActiveGame ? 'referee' : 'recommendation',
+  );
+  const [activeGame, setActiveGame] = useState<Game | null>(initialActiveGame);
 
   // Ref to track if referee mode was already entered for this targetRefereeGameId
   const refereeEnteredRef = useRef<string | null>(null);
@@ -145,10 +163,28 @@ export default function ChatPage({
 
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || []);
 
+  const persistSessionMemory = (overrides: {
+    mode?: ChatMode;
+    activeGameId?: string | null;
+    dialogueState?: DialogueSessionMemory;
+  } = {}) => {
+    onSessionMemoryUpdate?.({
+      dialogueState: overrides.dialogueState ?? dialogueAgent.getSnapshot(),
+      mode: overrides.mode ?? mode,
+      activeGameId: overrides.activeGameId ?? activeGame?.id ?? null,
+    });
+  };
+
   // 初始化LLM配置
   useEffect(() => {
     initLLMConfig();
     setUseLLM(!isMockMode());
+  }, []);
+
+  useEffect(() => {
+    dialogueAgent.restoreSnapshot(initialDialogueState);
+    // Restore once for this mounted session. The parent remounts ChatPage when session id changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -347,6 +383,14 @@ export default function ChatPage({
   };
 
   const resetStreamedSpeechQueue = (messageId?: string | null) => {
+    for (const item of streamedSpeechQueueRef.current.items) {
+      item.prepareAbortController?.abort();
+      item.prepareAbortController = null;
+      if (['queued', 'preparing', 'ready', 'playing'].includes(item.status)) {
+        item.status = 'failed';
+      }
+    }
+
     streamedSpeechQueueRef.current = createEmptyStreamedSpeechQueueState(
       streamedSpeechQueueRef.current.generation + 1,
       messageId ?? null,
@@ -382,12 +426,20 @@ export default function ChatPage({
     }
 
     item.status = 'preparing';
+    const prepareAbortController = new AbortController();
+    item.prepareAbortController = prepareAbortController;
     item.preparePromise = prepareDmTtsPlayback(item.text, {
       force: true,
       allowBrowserFallback: false,
+      requestKey: item.id,
+      signal: prepareAbortController.signal,
     }).then((preparedPlayback) => {
       const state = streamedSpeechQueueRef.current;
-      if (state.generation !== generation || state.messageId !== item.messageId) {
+      if (
+        prepareAbortController.signal.aborted
+        || state.generation !== generation
+        || state.messageId !== item.messageId
+      ) {
         return null;
       }
 
@@ -402,7 +454,12 @@ export default function ChatPage({
       return null;
     }).finally(() => {
       const state = streamedSpeechQueueRef.current;
-      if (state.generation === generation && state.messageId === item.messageId) {
+      if (
+        item.prepareAbortController === prepareAbortController
+        && state.generation === generation
+        && state.messageId === item.messageId
+      ) {
+        item.prepareAbortController = null;
         item.preparePromise = null;
       }
     });
@@ -495,6 +552,7 @@ export default function ChatPage({
         status: 'queued',
         preparedPlayback: null,
         preparePromise: null,
+        prepareAbortController: null,
       });
       state.nextSegmentIndex += 1;
       existingTexts.add(segment);
@@ -697,6 +755,11 @@ export default function ChatPage({
 
       if (result.switchMode) {
         exitRefereeMode();
+      } else {
+        persistSessionMemory({
+          mode: turnMode,
+          activeGameId: turnMode === 'referee' ? refereeGame?.id ?? activeGame?.id ?? null : null,
+        });
       }
 
       return result;
@@ -710,6 +773,10 @@ export default function ChatPage({
   const enterRefereeMode = (game: Game) => {
     setMode('referee');
     setActiveGame(game);
+    persistSessionMemory({
+      mode: 'referee',
+      activeGameId: game.id,
+    });
 
     // 添加进入裁判模式的胶囊消息 (System Message)
     const systemMessage: ChatMessage = {
@@ -727,6 +794,10 @@ export default function ChatPage({
     setMode('recommendation');
     setActiveGame(null);
     refereeEnteredRef.current = null;
+    persistSessionMemory({
+      mode: 'recommendation',
+      activeGameId: null,
+    });
 
     // 添加退出裁判模式的胶囊消息 (System Message)
     const systemMessage: ChatMessage = {
@@ -1008,10 +1079,15 @@ export default function ChatPage({
         try {
           const transcript = await transcribeRecordedAudio(audioBlob, recordedMimeType);
           if (!transcript) {
-            alert('没有识别到清晰语音，请再试一次');
-            if (!previewText) {
-              setInputValue(inputBeforeRecordingRef.current);
+            if (previewText) {
+              setInputValue(previewText);
+              inputBeforeRecordingRef.current = '';
+              inputRef.current?.focus();
+              return;
             }
+
+            alert('没有识别到清晰语音，请再试一次');
+            setInputValue(inputBeforeRecordingRef.current);
             return;
           }
 
@@ -1019,9 +1095,14 @@ export default function ChatPage({
           inputBeforeRecordingRef.current = '';
           inputRef.current?.focus();
         } catch (error: any) {
-          if (!previewText) {
-            setInputValue(inputBeforeRecordingRef.current);
+          if (previewText) {
+            setInputValue(previewText);
+            inputBeforeRecordingRef.current = '';
+            inputRef.current?.focus();
+            return;
           }
+
+          setInputValue(inputBeforeRecordingRef.current);
           alert(error?.message || '语音转写失败，请稍后重试');
         } finally {
           setIsTranscribing(false);

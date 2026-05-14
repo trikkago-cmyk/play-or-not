@@ -106,6 +106,17 @@
   - the referee prompt now tells 洛思 to digest searched rules into a complete answer rather than dumping links or raw references
   - when a user asks to switch games from referee mode, the turn is rerouted through the normal recommendation pipeline
   - recommendation results now return exactly one primary game for the chat card path, with no hidden alternative list attached to the same answer
+- Replaced fake history / runtime-only session memory with real per-account local session persistence:
+  - `HistoryPage` now renders saved sessions instead of `mockChatSessions`
+  - every chat session stores messages, current mode, active referee game id, and a `DialogueAgent` memory snapshot
+  - switching sessions restores that session's recommendation constraints and already-shown games
+  - creating a new session resets short-term recommendation memory while leaving account-level long-term preference memory separate
+  - deleting a history item now deletes the real saved session instead of showing a demo alert
+- Closed the streamed TTS cancellation gap:
+  - `cancelDmTtsPrefetch()` now aborts all in-flight TTS fetches instead of being a no-op placeholder
+  - each streamed speech segment now owns an `AbortController`, so queue reset aborts pending segment preparation directly
+  - late TTS responses are checked against both the segment abort signal and queue generation before they can become playable
+  - new turns still stop active playback, clear the streamed queue, and invalidate old audio through the existing generation / token guards
 
 ## Validation
 
@@ -269,6 +280,20 @@
   - Passed after adding Ark `ToolNotOpen` retry: `15 files / 101 tests`
 - `npm run build`
   - Passed after adding Ark `ToolNotOpen` retry, with only the existing Vite large chunk warning
+- `npm exec -- tsc -p tsconfig.app.json --noEmit`
+  - Passed after real per-account session memory persistence
+- `npm test`
+  - Passed after real per-account session memory persistence: `17 files / 118 tests`
+- `npm run build`
+  - Passed after real per-account session memory persistence, with only the existing Vite large chunk warning
+- `npm test -- src/services/__tests__/dmTtsService.test.ts src/services/__tests__/streamedTtsUtils.test.ts`
+  - Passed after streamed TTS cancellation hardening: `2 files / 15 tests`
+- `npm exec -- tsc -p tsconfig.app.json --noEmit`
+  - Passed after streamed TTS cancellation hardening
+- `npm test`
+  - Passed after streamed TTS cancellation hardening: `17 files / 119 tests`
+- `npm run build`
+  - Passed after streamed TTS cancellation hardening, with only the existing Vite large chunk warning
 - Preview smoke for `https://play-or-not-hqpbzhao8-trikkagos-projects.vercel.app`
   - `GET /` returned `200`
   - `POST /api/chat` with Ark `web_search` requested returned `200`, `x-llm-model: deepseek-v3-2-251201`, `x-llm-upstream-format: ark_responses`

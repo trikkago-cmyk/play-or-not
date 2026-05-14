@@ -123,4 +123,34 @@ describe('DialogueAgent recommendation session memory', () => {
     expect(latestCall?.[3]).toBe('recommendation');
     expect(latestCall?.[4]).toBeUndefined();
   });
+
+  it('restores short-term recommendation memory from a session snapshot', async () => {
+    const originalAgent = new DialogueAgent(false);
+
+    await originalAgent.processInput('我们 6 个人，需要纸笔规划、图图写写的，轻松有趣一点。', 'recommendation');
+
+    const restoredAgent = new DialogueAgent(false);
+    restoredAgent.restoreSnapshot(originalAgent.getSnapshot());
+
+    await restoredAgent.processInput('换一个', 'recommendation');
+
+    const latestIntent = getGameRecommendationMock.mock.calls.at(-1)?.[5]?.recommendationIntent;
+    expect(latestIntent).toMatchObject({
+      requestedPlayerCount: 6,
+      lastAction: 'continue',
+    });
+    expect(latestIntent?.desiredTags).toEqual(expect.arrayContaining(['纸笔规划', '轻松休闲']));
+  });
+
+  it('does not inherit short-term memory after reset', async () => {
+    const agent = new DialogueAgent(false);
+
+    await agent.processInput('我们 6 个人，需要纸笔规划、图图写写的。', 'recommendation');
+    agent.reset();
+    await agent.processInput('换一个', 'recommendation');
+
+    const latestIntent = getGameRecommendationMock.mock.calls.at(-1)?.[5]?.recommendationIntent;
+    expect(latestIntent?.requestedPlayerCount).toBeUndefined();
+    expect(latestIntent?.lastAction).toBe('new');
+  });
 });

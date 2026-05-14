@@ -4,10 +4,11 @@ import type { ChatSession } from '@/types';
 interface HistoryPageProps {
   onBack: () => void;
   onNavigateToChat: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string) => void;
   sessions: ChatSession[];
 }
 
-export default function HistoryPage({ onBack, onNavigateToChat, sessions }: HistoryPageProps) {
+export default function HistoryPage({ onBack, onNavigateToChat, onDeleteSession, sessions }: HistoryPageProps) {
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -96,7 +97,7 @@ export default function HistoryPage({ onBack, onNavigateToChat, sessions }: Hist
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      alert('删除会话功能演示');
+                      onDeleteSession(session.id);
                     }}
                     className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-red-100 transition-colors flex-shrink-0 ml-2"
                   >

@@ -6,7 +6,14 @@ import {
   type RecommendationIntent,
 } from './llmService';
 import { getPersistentContextForPrompt } from './memoryService';
-import type { ChatMode, Game, RecommendationIntentAction, RecommendationSessionState } from '@/types';
+import type {
+  ChatMode,
+  DialogueContextMemory,
+  DialogueSessionMemory,
+  Game,
+  RecommendationIntentAction,
+  RecommendationSessionState,
+} from '@/types';
 
 // RAG 检索结果
 interface RetrievalResult {
@@ -16,18 +23,7 @@ interface RetrievalResult {
   switchMode?: boolean;
 }
 
-// 对话上下文
-interface DialogueContext {
-  playerCount?: number;
-  scenario?: string;
-  complexity?: 'low' | 'medium' | 'high';
-  preferredTags: string[];
-  mentionedGames: string[];
-  recommendationState: RecommendationSessionState;
-  turnCount: number;
-  lastQuery: string;
-  history: { role: 'user' | 'assistant'; content: string }[];
-}
+type DialogueContext = DialogueContextMemory;
 
 interface DialogueStreamCallbacks {
   onAnswerUpdate?: (text: string) => void;
@@ -103,6 +99,31 @@ function createEmptyDialogueContext(): DialogueContext {
     turnCount: 0,
     lastQuery: '',
     history: [],
+  };
+}
+
+function normalizeDialogueContext(context?: Partial<DialogueContextMemory>): DialogueContext {
+  const complexity = context?.complexity;
+
+  return {
+    playerCount: typeof context?.playerCount === 'number' ? context.playerCount : undefined,
+    scenario: typeof context?.scenario === 'string' ? context.scenario : undefined,
+    complexity: complexity === 'low' || complexity === 'medium' || complexity === 'high' ? complexity : undefined,
+    preferredTags: Array.isArray(context?.preferredTags) ? [...context.preferredTags] : [],
+    mentionedGames: Array.isArray(context?.mentionedGames) ? [...context.mentionedGames] : [],
+    recommendationState: cloneRecommendationSessionState(context?.recommendationState),
+    turnCount: typeof context?.turnCount === 'number' ? context.turnCount : 0,
+    lastQuery: typeof context?.lastQuery === 'string' ? context.lastQuery : '',
+    history: Array.isArray(context?.history)
+      ? context.history
+        .filter((entry) => (
+          (entry.role === 'user' || entry.role === 'assistant')
+          && typeof entry.content === 'string'
+          && entry.content.trim().length > 0
+        ))
+        .map((entry) => ({ role: entry.role, content: entry.content }))
+        .slice(-20)
+      : [],
   };
 }
 
@@ -599,6 +620,27 @@ export class DialogueAgent {
       recommendationState: cloneRecommendationSessionState(this.context.recommendationState),
       history: this.context.history.map((entry) => ({ ...entry })),
     };
+  }
+
+  getSnapshot(): DialogueSessionMemory {
+    return {
+      version: 1,
+      sessionGames: this.getSessionGames(),
+      context: this.getContext(),
+      updatedAt: Date.now(),
+    };
+  }
+
+  restoreSnapshot(snapshot?: DialogueSessionMemory | null): void {
+    if (!snapshot) {
+      this.reset();
+      return;
+    }
+
+    this.sessionGames = Array.isArray(snapshot.sessionGames)
+      ? dedupeOrdered(snapshot.sessionGames.filter((gameId) => typeof gameId === 'string' && gameId.trim()))
+      : [];
+    this.context = normalizeDialogueContext(snapshot.context);
   }
 
   // 重置会话

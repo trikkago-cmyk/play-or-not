@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildSpeakableMessage,
+  cancelDmTtsPrefetch,
   getDmTtsEnabled,
   hasDmTtsPrimedPlayback,
   pickBestDmVoice,
+  prepareDmTtsPlayback,
   primeDmTtsPlayback,
   resetDmTtsStateForTests,
   setDmTtsEnabled,
@@ -263,6 +265,44 @@ describe('dmTtsService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(audioPlayMock).toHaveBeenCalledTimes(1);
     expect(speakMock).toHaveBeenCalledTimes(0);
+  });
+
+  it('aborts all in-flight streamed TTS prefetch requests', async () => {
+    const abortSignals: AbortSignal[] = [];
+    fetchMock.mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      const signal = init?.signal;
+      if (!signal) {
+        return Promise.reject(new Error('missing abort signal'));
+      }
+
+      abortSignals.push(signal);
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        }, { once: true });
+      });
+    });
+
+    const firstPrepare = prepareDmTtsPlayback('第一段语音。', {
+      force: true,
+      allowBrowserFallback: false,
+      requestKey: 'turn-a:0',
+    });
+    const secondPrepare = prepareDmTtsPlayback('第二段语音。', {
+      force: true,
+      allowBrowserFallback: false,
+      requestKey: 'turn-a:1',
+    });
+
+    await vi.waitFor(() => {
+      expect(abortSignals).toHaveLength(2);
+    });
+
+    cancelDmTtsPrefetch();
+
+    expect(abortSignals.every((signal) => signal.aborted)).toBe(true);
+    await expect(firstPrepare).resolves.toBeNull();
+    await expect(secondPrepare).resolves.toBeNull();
   });
 
   it('queues speech on gesture-restricted browsers until primed by a user gesture', async () => {

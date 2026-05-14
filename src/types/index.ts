@@ -83,12 +83,39 @@ export interface RecommendationSessionState {
   updatedAt?: number;
 }
 
+export interface DialogueHistoryEntry {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface DialogueContextMemory {
+  playerCount?: number;
+  scenario?: string;
+  complexity?: 'low' | 'medium' | 'high';
+  preferredTags: string[];
+  mentionedGames: string[];
+  recommendationState: RecommendationSessionState;
+  turnCount: number;
+  lastQuery: string;
+  history: DialogueHistoryEntry[];
+}
+
+export interface DialogueSessionMemory {
+  version: 1;
+  sessionGames: string[];
+  context: DialogueContextMemory;
+  updatedAt: number;
+}
+
 export interface ChatSession {
   id: string;
   title: string;
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+  mode?: ChatMode;
+  activeGameId?: string | null;
+  dialogueState?: DialogueSessionMemory;
 }
 
 // User types

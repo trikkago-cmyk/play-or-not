@@ -44,6 +44,11 @@ type DmSpeakOptions = {
   requestKey?: string;
 };
 
+type DmTtsPrepareOptions = DmSpeakOptions & {
+  allowBrowserFallback?: boolean;
+  signal?: AbortSignal;
+};
+
 export type PreparedDmTtsPlayback =
   | {
       kind: 'remote-audio';
@@ -67,7 +72,7 @@ let activeSpeakRequest: {
 let activeAudioElement: HTMLAudioElement | null = null;
 let activeAudioObjectUrl: string | null = null;
 let activeAudioAbort: (() => void) | null = null;
-let activeFetchController: AbortController | null = null;
+const activeFetchControllers = new Set<AbortController>();
 let remoteTtsCooldownUntil = 0;
 
 function canUseRemoteAudioPlayback(): boolean {
@@ -379,7 +384,7 @@ export async function speakAsDm(
 
 export async function prepareDmTtsPlayback(
   rawText: string,
-  options: DmSpeakOptions & { allowBrowserFallback?: boolean } = {},
+  options: DmTtsPrepareOptions = {},
 ): Promise<PreparedDmTtsPlayback | null> {
   if (!isDmTtsSupported()) {
     return null;
@@ -394,7 +399,10 @@ export async function prepareDmTtsPlayback(
     return null;
   }
 
-  const remoteAudioBlob = await fetchRemoteTtsAudio(normalizedText);
+  const remoteAudioBlob = await fetchRemoteTtsAudio(normalizedText, {
+    requestKey: options.requestKey,
+    signal: options.signal,
+  });
   if (remoteAudioBlob) {
     return {
       kind: 'remote-audio',
@@ -458,8 +466,7 @@ export async function playPreparedDmTtsPlayback(
 }
 
 export function cancelDmTtsPrefetch() {
-  // The release recovery path prepares streamed chunks on demand; this hook keeps callers
-  // able to cancel older experimental prefetch work without requiring a separate cache.
+  cancelActiveFetches();
 }
 
 export function stopDmTtsPlayback() {
@@ -476,6 +483,7 @@ export function resetDmTtsStateForTests() {
   pendingSpeakRequest = null;
   activeSpeakRequest = null;
   remoteTtsCooldownUntil = 0;
+  cancelActiveFetches();
   cancelActivePlayback();
 }
 
@@ -594,10 +602,7 @@ async function playBrowserSpeechUtterance(
 }
 
 function cancelActivePlayback() {
-  if (activeFetchController) {
-    activeFetchController.abort();
-    activeFetchController = null;
-  }
+  cancelActiveFetches();
 
   if (activeAudioAbort) {
     activeAudioAbort();
@@ -620,13 +625,31 @@ function cancelActivePlayback() {
   }
 }
 
-async function fetchRemoteTtsAudio(text: string): Promise<Blob | null> {
+function cancelActiveFetches() {
+  for (const controller of activeFetchControllers) {
+    controller.abort();
+  }
+  activeFetchControllers.clear();
+}
+
+async function fetchRemoteTtsAudio(
+  text: string,
+  options: Pick<DmTtsPrepareOptions, 'requestKey' | 'signal'> = {},
+): Promise<Blob | null> {
   if (typeof fetch === 'undefined' || Date.now() < remoteTtsCooldownUntil) {
     return null;
   }
 
   const controller = new AbortController();
-  activeFetchController = controller;
+  activeFetchControllers.add(controller);
+  const abortFromParent = () => controller.abort();
+
+  if (options.signal?.aborted) {
+    activeFetchControllers.delete(controller);
+    return null;
+  }
+
+  options.signal?.addEventListener('abort', abortFromParent, { once: true });
 
   try {
     const response = await fetch('/api/tts', {
@@ -637,8 +660,6 @@ async function fetchRemoteTtsAudio(text: string): Promise<Blob | null> {
       body: JSON.stringify({ text }),
       signal: controller.signal,
     });
-
-    activeFetchController = null;
 
     if (!response.ok) {
       if (response.status === 404 || response.status === 503) {
@@ -652,14 +673,25 @@ async function fetchRemoteTtsAudio(text: string): Promise<Blob | null> {
       return null;
     }
 
-    return await response.blob();
+    if (options.signal?.aborted || controller.signal.aborted) {
+      return null;
+    }
+
+    const audioBlob = await response.blob();
+    if (options.signal?.aborted || controller.signal.aborted) {
+      return null;
+    }
+
+    return audioBlob;
   } catch (error) {
-    activeFetchController = null;
     if (isAbortError(error)) {
       return null;
     }
     console.warn('DM remote TTS fetch failed:', error);
     return null;
+  } finally {
+    options.signal?.removeEventListener('abort', abortFromParent);
+    activeFetchControllers.delete(controller);
   }
 }
 
