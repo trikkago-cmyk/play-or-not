@@ -2,6 +2,7 @@
 .DS_Store
 
 # Node / frontend build
+node_modules
 node_modules/
 dist/
 coverage/
@@ -19,7 +20,9 @@ __pycache__/
 !.env.example
 
 # Local deploy / runtime state
+.vercel
 .vercel/
+memory/
 rag/.chroma/
 rag/.cache/
 tts_service/evals/
