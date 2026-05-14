@@ -269,6 +269,11 @@
   - Passed after adding Ark `ToolNotOpen` retry: `15 files / 101 tests`
 - `npm run build`
   - Passed after adding Ark `ToolNotOpen` retry, with only the existing Vite large chunk warning
+- Preview smoke for `https://play-or-not-hqpbzhao8-trikkagos-projects.vercel.app`
+  - `GET /` returned `200`
+  - `POST /api/chat` with Ark `web_search` requested returned `200`, `x-llm-model: deepseek-v3-2-251201`, `x-llm-upstream-format: ark_responses`
+  - current Volcengine account still reports Ark web search as unavailable; route retried without the tool and returned `x-llm-web-search: unavailable_tool_retry`
+  - `POST /api/chat` with `stream: true` returned `200`, `content-type: text/event-stream`, `x-llm-upstream-format: ark_responses`
 
 ## Preview
 
@@ -294,6 +299,10 @@
   - `https://play-or-not-1rrkrz4nk-trikkagos-projects.vercel.app`
 - New preview after full recommendation-session memory hardening:
   - `https://play-or-not-1uml2ku8f-trikkagos-projects.vercel.app`
+- New preview after referee web-search fallback and one-card referee-switch fix:
+  - `https://play-or-not-g5kvtnwfw-trikkagos-projects.vercel.app`
+- New preview after Ark `ToolNotOpen` retry fallback:
+  - `https://play-or-not-hqpbzhao8-trikkagos-projects.vercel.app`
 - Smoke checks:
   - preview `/api/chat` returns `model: deepseek-v3-2-251201` when explicitly targeted
   - preview `/api/chat` still returns normalized `choices[0].message.content`
