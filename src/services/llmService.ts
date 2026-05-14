@@ -2042,6 +2042,7 @@ function getSystemInstruction({
     `;
   } else {
     // Referee Mode Logic
+    const externalSearchEnabled = isArkWebSearchEnabled();
     const rulesContext = retrievedRulesContext?.trim()
       ? retrievedRulesContext
       : activeGame?.knowledgeBase
@@ -2054,7 +2055,9 @@ function getSystemInstruction({
       ? `
       【内部规则资料】：
       这些资料只用于你自己判断，不要把 [证据1]、章节名、FAQ 标题、参考依据之类的内部结构露给用户。
-      如果当前资料没有直接写明，先使用可用的联网搜索工具核对公开规则、官方 FAQ、BGA 帮助或规则书资料；仍找不到可靠依据时，再明确说“这条我不敢瞎判”。
+      ${externalSearchEnabled
+        ? '如果当前资料没有直接写明，可以使用可用的联网搜索工具核对公开规则、官方 FAQ、BGA 帮助或规则书资料；仍找不到可靠依据时，再明确说“这条我不敢瞎判”。'
+        : '如果当前资料没有直接写明，请基于你对该桌游的通用规则知识谨慎推断，并把“确定结论”和“需要核对的细节”说清楚；不要假装本地资料已经覆盖。'}
       `
       : '';
 
@@ -2080,11 +2083,15 @@ function getSystemInstruction({
     1. 当本地规则库完整时，你按 **强规则权威** 回答；当本地规则库不完整时，你按 **谨慎助理** 回答。
     2. 当用户询问规则、争议、流程时，优先检索【核心技能库】。
     3. ** 请直接回答问题 **，先给结论，再把关键规则自然解释出来。不要说“根据规则...”“参考依据...”。
-    4. 遇到资料未提及的细节，不要假装规则里明确写了；如果可用，请先联网搜索补证据，优先使用官方规则、发行方 FAQ、BGA 帮助、BGG/规则书等可靠来源。
+    4. 遇到资料未提及的细节，不要假装规则里明确写了；${externalSearchEnabled
+      ? '如果可用，请先联网搜索补证据，优先使用官方规则、发行方 FAQ、BGA 帮助、BGG/规则书等可靠来源。'
+      : '请先用你自身掌握的桌游规则知识补充判断，但必须避免编造版本细节；若无法确认，就给出可操作的临场处理建议并提醒核对规则书。'}
     5. 解释规则要通俗易懂，像朋友交流一样自然，不要像在念规则说明卡。
     6. 不要把知识库字段名、标题名、问答标签原样吐给用户。禁止出现“目标：目标：”“FAQ：”“常见问题：”这种字段感很重的说法。
     7. 如果本地资料里已经有答案，就请你把它消化成一段完整结论，而不是把资料原句整块搬出来。
-    8. 如果你使用了联网搜索，不要把一堆链接甩给用户；请把查到的信息消化成完整、可执行的判定或玩法解释。只有仍不确定时才提醒用户核对实体规则书。
+    8. ${externalSearchEnabled
+      ? '如果你使用了联网搜索，不要把一堆链接甩给用户；请把查到的信息消化成完整、可执行的判定或玩法解释。只有仍不确定时才提醒用户核对实体规则书。'
+      : '当前不要承诺已经联网搜索；如果只是凭本地资料和通用知识判断，就用自然口吻说明把握度，不要伪造来源。'}
       
       【回复格式要求】：
       - 必须使用 ** Markdown ** 格式。
@@ -2117,8 +2124,19 @@ function buildCitationReferenceBlock(
 }
 
 // 调用真实LLM API
+function isArkWebSearchEnabled(): boolean {
+  const env = (import.meta as unknown as { env?: Record<string, string | boolean | undefined> }).env;
+  const processEnv = (globalThis as unknown as {
+    process?: { env?: Record<string, string | boolean | undefined> };
+  }).process?.env;
+  return env?.VITE_ENABLE_ARK_WEB_SEARCH === 'true'
+    || env?.VITE_ENABLE_ARK_WEB_SEARCH === true
+    || processEnv?.VITE_ENABLE_ARK_WEB_SEARCH === 'true'
+    || processEnv?.VITE_ENABLE_ARK_WEB_SEARCH === true;
+}
+
 function buildLlmTools(options: LLMApiCallOptions) {
-  return options.allowWebSearch
+  return options.allowWebSearch && isArkWebSearchEnabled()
     ? [{ type: 'web_search', max_keyword: 3 }]
     : undefined;
 }

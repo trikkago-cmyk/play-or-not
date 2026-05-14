@@ -403,3 +403,12 @@
   - response headers still include `x-llm-web-search: unavailable_tool_retry`
   - interpretation: code-level Ark Responses tool passthrough is wired, but the Volcengine account has not activated the Web Search service component yet
   - this is not acceptance-ready for "KB gap -> internet fallback" until the Ark account-level Web Search plugin is enabled and the same smoke returns without the retry header
+- Follow-up after deciding not to enable the paid Ark Web Search plugin:
+  - production referee prompts now default to local structured wiki plus the LLM's general board-game knowledge instead of requesting Ark `web_search`
+  - Ark `web_search` remains available only behind `VITE_ENABLE_ARK_WEB_SEARCH=true`
+  - referee prompt now tells the model not to claim it searched or fake sources when the paid tool is disabled
+  - verification:
+    - `npm exec vitest -- --run src/services/__tests__/llmService.refereeEvidence.test.ts api/__tests__/chat.test.ts` passed: `2 files / 17 tests`
+    - `npm exec tsc -- -p tsconfig.app.json --noEmit` passed
+    - `npm test` passed: `15 files / 102 tests`
+    - `npm run build` passed, with only the existing Vite large chunk warning

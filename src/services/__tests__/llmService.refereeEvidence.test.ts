@@ -58,6 +58,7 @@ describe('llmService referee evidence guardrail', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('answers directly without auto-appending hidden wiki evidence by default', async () => {
@@ -146,7 +147,52 @@ describe('llmService referee evidence guardrail', () => {
     expect(result.text).not.toContain('参考依据');
   });
 
-  it('enables web search for referee questions when local rules may be incomplete', async () => {
+  it('uses LLM prior fallback by default instead of paid Ark web search for referee gaps', async () => {
+    expect(activeGame).toBeDefined();
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes('/api/chat')) {
+        const body = JSON.parse(String(init?.body || '{}'));
+        expect(body.tools).toBeUndefined();
+        expect(body.messages[0]?.content).toContain('通用规则知识');
+        expect(body.messages[0]?.content).not.toContain('当前资料没有直接写明，可以使用可用的联网搜索工具');
+
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  reply: '**可以这么看：** UNO 的功能牌要按牌面效果结算。',
+                  switch_to_recommendation: false,
+                }),
+              },
+            }],
+          }),
+        } as Response;
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    globalThis.fetch = fetchMock;
+
+    const result = await getLLMResponse(
+      'UNO 里有哪些牌的类型，分别有什么效果？',
+      'referee',
+      activeGame,
+      [],
+      [],
+    );
+
+    expect(result.text).toContain('功能牌');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('can still enable Ark web search behind an explicit env flag', async () => {
+    vi.stubEnv('VITE_ENABLE_ARK_WEB_SEARCH', 'true');
     expect(activeGame).toBeDefined();
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -155,8 +201,7 @@ describe('llmService referee evidence guardrail', () => {
       if (url.includes('/api/chat')) {
         const body = JSON.parse(String(init?.body || '{}'));
         expect(body.tools).toEqual([{ type: 'web_search', max_keyword: 3 }]);
-        expect(body.messages[0]?.content).toContain('联网搜索');
-        expect(body.messages[0]?.content).toContain('完整、可执行');
+        expect(body.messages[0]?.content).toContain('联网搜索工具');
 
         return {
           ok: true,
