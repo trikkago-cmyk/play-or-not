@@ -94,6 +94,11 @@
   - `src/services/llmService.ts` no longer imports or calls `pythonRagService` in the user-facing main path
   - `/api/rag`, Python RAG ingest, and RAG eval suites remain in the repo as experiment / audit tooling only
   - added `docs/llm-wiki-governance.md` to lock this serving rule for release review
+- Added recommendation-session intent memory for the clean release branch:
+  - every recommendation turn is merged with the current single-session context, not only explicit `换一个` turns
+  - the active state now preserves hard constraints for players, time, complexity, and age unless the user clearly overrides or resets them
+  - negative corrections such as `不要纸笔，换成阵营推理` remove stale mechanic signals while keeping still-valid hard constraints
+  - `轻松` / `休闲` / `好教` style requests now also feed the structured low-complexity filter instead of remaining copy-only mood words
 
 ## Validation
 
@@ -229,6 +234,14 @@
   - Passed after session-intent inheritance fix, with only the existing Vite large chunk warning
 - `npm exec tsc -- -p tsconfig.app.json --noEmit`
   - Passed after session-intent inheritance fix
+- `npm exec vitest -- --run src/services/__tests__/ragService.test.ts src/services/__tests__/llmService.test.ts`
+  - Passed after full recommendation-session memory hardening: `2 files / 27 tests`
+- `npm exec tsc -- -p tsconfig.app.json --noEmit`
+  - Passed after full recommendation-session memory hardening
+- `npm test`
+  - Passed after full recommendation-session memory hardening: `15 files / 97 tests`
+- `npm run build`
+  - Passed after full recommendation-session memory hardening, with only the existing Vite large chunk warning
 
 ## Preview
 

@@ -1,7 +1,13 @@
 import { GAME_DATABASE } from '@/data/gameDatabase';
-import { getGameRecommendation, getGameRecommendationStream, getSimilarGames } from './llmService';
+import {
+  getGameRecommendation,
+  getGameRecommendationStream,
+  getSimilarGames,
+  parseRecommendationIntent,
+  type RecommendationIntent,
+} from './llmService';
 import { getPersistentContextForPrompt } from './memoryService';
-import type { Game } from '@/types';
+import type { ChatMode, Game, RecommendationIntentAction, RecommendationSessionState } from '@/types';
 
 // RAG 检索结果
 interface RetrievalResult {
@@ -18,6 +24,7 @@ interface DialogueContext {
   complexity?: 'low' | 'medium' | 'high';
   preferredTags: string[];
   mentionedGames: string[];
+  recommendationState: RecommendationSessionState;
   turnCount: number;
   lastQuery: string;
   history: { role: 'user' | 'assistant'; content: string }[];
@@ -25,6 +32,294 @@ interface DialogueContext {
 
 interface DialogueStreamCallbacks {
   onAnswerUpdate?: (text: string) => void;
+}
+
+const CHINESE_PLAYER_COUNT_MAP: Record<string, number> = {
+  一: 1,
+  二: 2,
+  两: 2,
+  俩: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+  十: 10,
+};
+const RESET_RECOMMENDATION_CONTEXT_PATTERN = /(重新开始|从头来|从头开始|别管刚才|不按刚才|忘掉刚才|清空刚才|新的需求|全新推荐|换个场景|另一个场景|重新推荐)/;
+const CONTINUE_RECOMMENDATION_PATTERN = /(换一个|再推荐|再来一个|还有别的吗|还有别的|下一个|类似的|同样的|不要这个|不喜欢这个)/;
+const OVERRIDE_RECOMMENDATION_PATTERN = /(改成|改为|换成|换为|变成|这次|现在|这回|那就|不要|不用|别|不想|去掉|排除)/;
+const NEGATIVE_RECOMMENDATION_GROUPS = [
+  {
+    pattern: /(不要|不用|别|不想|去掉|排除)[^，。；,.、]{0,10}(纸笔|写写画画|图图写写|画画|绘图|填表|填色)/,
+    tags: ['纸笔规划'],
+    terms: ['纸笔', '写写画画', '图图写写', '画画', '绘图', '填表', '填色'],
+  },
+  {
+    pattern: /(不要|不用|别|不想|去掉|排除)[^，。；,.、]{0,10}(阵营|身份|狼人|阿瓦隆|嘴炮)/,
+    tags: ['阵营推理', '嘴炮谈判'],
+    terms: ['阵营', '身份', '狼人', '阿瓦隆', '嘴炮'],
+  },
+  {
+    pattern: /(不要|不用|别|不想|去掉|排除)[^，。；,.、]{0,10}(重策|重度|烧脑|复杂|太难)/,
+    tags: ['烧脑策略', '重策略'],
+    terms: ['重策', '重度', '烧脑', '复杂', '太难'],
+  },
+] as const;
+
+function dedupeOrdered<T>(values: T[]): T[] {
+  return [...new Set(values)];
+}
+
+function createEmptyRecommendationSessionState(): RecommendationSessionState {
+  return {
+    desiredTags: [],
+    searchTerms: [],
+    excludedTags: [],
+    excludedTerms: [],
+    sourceTurns: [],
+  };
+}
+
+function cloneRecommendationSessionState(state?: RecommendationSessionState): RecommendationSessionState {
+  return {
+    ...createEmptyRecommendationSessionState(),
+    ...state,
+    desiredTags: [...(state?.desiredTags ?? [])],
+    searchTerms: [...(state?.searchTerms ?? [])],
+    excludedTags: [...(state?.excludedTags ?? [])],
+    excludedTerms: [...(state?.excludedTerms ?? [])],
+    sourceTurns: [...(state?.sourceTurns ?? [])],
+  };
+}
+
+function createEmptyDialogueContext(): DialogueContext {
+  return {
+    preferredTags: [],
+    mentionedGames: [],
+    recommendationState: createEmptyRecommendationSessionState(),
+    turnCount: 0,
+    lastQuery: '',
+    history: [],
+  };
+}
+
+function hasRecommendationIntentSignal(intent: RecommendationIntent): boolean {
+  return Boolean(
+    typeof intent.requestedPlayerCount === 'number'
+    || typeof intent.requestedPlayerRangeMin === 'number'
+    || typeof intent.requestedPlayerRangeMax === 'number'
+    || typeof intent.maxPlaytime === 'number'
+    || typeof intent.maxAgeRating === 'number'
+    || typeof intent.maxComplexity === 'number'
+    || typeof intent.minComplexity === 'number'
+    || intent.desiredTags.length > 0
+    || intent.searchTerms.length > 0
+  );
+}
+
+function detectRecommendationAction(
+  input: string,
+  intent: RecommendationIntent,
+  previousState?: RecommendationSessionState,
+): RecommendationIntentAction {
+  const text = input.trim();
+  const hasPreviousState = Boolean(previousState && (
+    previousState.sourceTurns.length > 0
+    || previousState.desiredTags.length > 0
+    || previousState.searchTerms.length > 0
+    || typeof previousState.requestedPlayerCount === 'number'
+    || typeof previousState.requestedPlayerRangeMin === 'number'
+    || typeof previousState.requestedPlayerRangeMax === 'number'
+  ));
+
+  if (!text || /^(你好|您好|嗨|哈喽|hello|hi|谢谢|谢啦|好的|好滴|ok|收到|明白|哈哈|嗯嗯|嗯|哦)[!！,.。?？~～]*$/i.test(text)) {
+    return 'smalltalk';
+  }
+  if (RESET_RECOMMENDATION_CONTEXT_PATTERN.test(text)) {
+    return 'reset';
+  }
+  if (OVERRIDE_RECOMMENDATION_PATTERN.test(text) && hasRecommendationIntentSignal(intent)) {
+    return hasPreviousState ? 'override' : 'new';
+  }
+  if (CONTINUE_RECOMMENDATION_PATTERN.test(text)) {
+    return hasPreviousState ? 'continue' : 'new';
+  }
+  if (hasPreviousState && hasRecommendationIntentSignal(intent)) {
+    return 'refine';
+  }
+
+  return hasRecommendationIntentSignal(intent) ? 'new' : 'smalltalk';
+}
+
+function collectNegativeRecommendationSignals(input: string) {
+  const excludedTags: string[] = [];
+  const excludedTerms: string[] = [];
+
+  for (const group of NEGATIVE_RECOMMENDATION_GROUPS) {
+    if (!group.pattern.test(input)) {
+      continue;
+    }
+
+    excludedTags.push(...group.tags);
+    excludedTerms.push(...group.terms);
+  }
+
+  return {
+    excludedTags: dedupeOrdered(excludedTags),
+    excludedTerms: dedupeOrdered(excludedTerms),
+  };
+}
+
+function removeExcludedSignals(values: string[], excludedTags: string[], excludedTerms: string[]): string[] {
+  const normalizedExcluded = new Set([...excludedTags, ...excludedTerms]);
+  return values.filter((value) => !normalizedExcluded.has(value));
+}
+
+function mergeRecommendationSessionState(
+  previousState: RecommendationSessionState | undefined,
+  input: string,
+): RecommendationSessionState {
+  const parsedIntent = parseRecommendationIntent(input);
+  const action = detectRecommendationAction(input, parsedIntent, previousState);
+  const negativeSignals = collectNegativeRecommendationSignals(input);
+  const baseState = action === 'reset' || action === 'new'
+    ? createEmptyRecommendationSessionState()
+    : cloneRecommendationSessionState(previousState);
+
+  if (action === 'smalltalk') {
+    return {
+      ...baseState,
+      lastAction: action,
+      updatedAt: Date.now(),
+    };
+  }
+
+  const nextState = cloneRecommendationSessionState(baseState);
+  if (
+    typeof parsedIntent.requestedPlayerRangeMin === 'number'
+    && typeof parsedIntent.requestedPlayerRangeMax === 'number'
+  ) {
+    nextState.requestedPlayerCount = undefined;
+    nextState.requestedPlayerRangeMin = parsedIntent.requestedPlayerRangeMin;
+    nextState.requestedPlayerRangeMax = parsedIntent.requestedPlayerRangeMax;
+  } else if (typeof parsedIntent.requestedPlayerCount === 'number') {
+    nextState.requestedPlayerCount = parsedIntent.requestedPlayerCount;
+    nextState.requestedPlayerRangeMin = undefined;
+    nextState.requestedPlayerRangeMax = undefined;
+  }
+  if (typeof parsedIntent.maxPlaytime === 'number') {
+    nextState.maxPlaytime = parsedIntent.maxPlaytime;
+  }
+  if (typeof parsedIntent.maxAgeRating === 'number') {
+    nextState.maxAgeRating = parsedIntent.maxAgeRating;
+  }
+  if (typeof parsedIntent.maxComplexity === 'number') {
+    nextState.maxComplexity = parsedIntent.maxComplexity;
+    nextState.minComplexity = undefined;
+  }
+  if (typeof parsedIntent.minComplexity === 'number') {
+    nextState.minComplexity = parsedIntent.minComplexity;
+    if (!/别太浅|有点策略|中等|适中/.test(input)) {
+      nextState.maxComplexity = undefined;
+    }
+  }
+
+  nextState.excludedTags = dedupeOrdered([...nextState.excludedTags, ...negativeSignals.excludedTags]);
+  nextState.excludedTerms = dedupeOrdered([...nextState.excludedTerms, ...negativeSignals.excludedTerms]);
+  nextState.desiredTags = dedupeOrdered(
+    removeExcludedSignals([...nextState.desiredTags, ...parsedIntent.desiredTags], nextState.excludedTags, nextState.excludedTerms),
+  );
+  nextState.searchTerms = dedupeOrdered(
+    removeExcludedSignals([...nextState.searchTerms, ...parsedIntent.searchTerms], nextState.excludedTags, nextState.excludedTerms),
+  );
+  nextState.sourceTurns = dedupeOrdered([...nextState.sourceTurns, input.trim()].filter(Boolean)).slice(-8);
+  nextState.lastAction = action;
+  nextState.updatedAt = Date.now();
+
+  return nextState;
+}
+
+function buildRecommendationStatePrompt(state?: RecommendationSessionState): string {
+  if (!state) {
+    return '';
+  }
+
+  const lines: string[] = [];
+  if (typeof state.requestedPlayerRangeMin === 'number' && typeof state.requestedPlayerRangeMax === 'number') {
+    lines.push(`- 当前有效人数硬约束：${state.requestedPlayerRangeMin}-${state.requestedPlayerRangeMax}人。`);
+  } else if (typeof state.requestedPlayerCount === 'number') {
+    lines.push(`- 当前有效人数硬约束：${state.requestedPlayerCount}人。`);
+  }
+  if (typeof state.maxPlaytime === 'number') {
+    lines.push(`- 当前有效时长硬约束：不超过 ${state.maxPlaytime} 分钟。`);
+  }
+  if (typeof state.maxAgeRating === 'number') {
+    lines.push(`- 当前有效年龄硬约束：适合 ${state.maxAgeRating} 岁左右或更低门槛。`);
+  }
+  if (typeof state.maxComplexity === 'number') {
+    lines.push(`- 当前有效复杂度倾向：不要高于 ${state.maxComplexity.toFixed(1)}，优先轻松好教。`);
+  }
+  if (typeof state.minComplexity === 'number') {
+    lines.push('- 当前有效复杂度倾向：不要太浅，至少有一点策略深度。');
+  }
+  if (state.desiredTags.length > 0) {
+    lines.push(`- 当前有效意图标签：${state.desiredTags.join('、')}。`);
+  }
+  if (state.excludedTags.length > 0 || state.excludedTerms.length > 0) {
+    lines.push(`- 当前明确排除：${dedupeOrdered([...state.excludedTags, ...state.excludedTerms]).join('、')}。`);
+  }
+
+  return lines.length > 0
+    ? ['【本轮会话意图判断】', ...lines, '除非用户明确覆盖，否则以上约束继续生效。'].join('\n')
+    : '';
+}
+
+function inferPlayerCountFromText(text: string): number | undefined {
+  const digitMatch = text.match(/(\d+)\s*(?:个人|人|位)/);
+  if (digitMatch) {
+    return Number(digitMatch[1]);
+  }
+
+  const chineseMatch = text.match(/([一二两俩三四五六七八九十])\s*(?:个人|人|位)/);
+  return chineseMatch ? CHINESE_PLAYER_COUNT_MAP[chineseMatch[1]] : undefined;
+}
+
+function inferComplexityFromText(text: string): 'low' | 'medium' | 'high' | undefined {
+  if (/简单|轻松|休闲|入门|新手友好/.test(text)) {
+    return 'low';
+  }
+  if (/烧脑|策略|硬核|高复杂|深度/.test(text)) {
+    return 'high';
+  }
+  if (/中等|适中/.test(text)) {
+    return 'medium';
+  }
+  return undefined;
+}
+
+function inferPreferredTagsFromText(text: string): string[] {
+  const inferredTags: string[] = [];
+
+  if (/亲子|家庭/.test(text)) {
+    inferredTags.push('亲子');
+  }
+  if (/情侣|约会/.test(text)) {
+    inferredTags.push('情侣');
+  }
+  if (/聚会|热闹/.test(text)) {
+    inferredTags.push('聚会');
+  }
+  if (/破冰|社交/.test(text)) {
+    inferredTags.push('破冰');
+  }
+  if (/烧脑|策略|推理/.test(text)) {
+    inferredTags.push('策略');
+  }
+
+  return dedupeOrdered(inferredTags);
 }
 
 function getStructuredTags(game: Game): string[] {
@@ -100,13 +395,7 @@ export function answerGameQuestion(gameId: string, question: string): string {
 // 对话Agent类 - 管理多轮对话状态
 export class DialogueAgent {
   private sessionGames: string[] = [];
-  private context: DialogueContext = {
-    preferredTags: [],
-    mentionedGames: [],
-    turnCount: 0,
-    lastQuery: '',
-    history: [],
-  };
+  private context: DialogueContext = createEmptyDialogueContext();
   // private useLLM: boolean = false;
 
   constructor(_useLLM: boolean = false) {
@@ -118,8 +407,45 @@ export class DialogueAgent {
     // this.useLLM = _use;
   }
 
+  private mergeInputSignalsIntoContext(input: string, mode: ChatMode): void {
+    const nextPlayerCount = inferPlayerCountFromText(input);
+    if (typeof nextPlayerCount === 'number') {
+      this.context.playerCount = nextPlayerCount;
+    }
+
+    const nextComplexity = inferComplexityFromText(input);
+    if (nextComplexity) {
+      this.context.complexity = nextComplexity;
+    }
+
+    const nextPreferredTags = inferPreferredTagsFromText(input);
+    if (nextPreferredTags.length > 0) {
+      this.context.preferredTags = dedupeOrdered([...this.context.preferredTags, ...nextPreferredTags]);
+    }
+
+    if (mode !== 'recommendation') {
+      return;
+    }
+
+    this.context.recommendationState = mergeRecommendationSessionState(
+      this.context.recommendationState,
+      input,
+    );
+
+    if (typeof this.context.recommendationState.requestedPlayerCount === 'number') {
+      this.context.playerCount = this.context.recommendationState.requestedPlayerCount;
+    }
+
+    this.context.preferredTags = dedupeOrdered([
+      ...this.context.preferredTags,
+      ...this.context.recommendationState.desiredTags,
+    ]);
+  }
+
   // 处理用户输入
-  async processInput(input: string, mode: 'recommendation' | 'referee' = 'recommendation', activeGame?: Game): Promise<RetrievalResult> {
+  async processInput(input: string, mode: ChatMode = 'recommendation', activeGame?: Game): Promise<RetrievalResult> {
+    this.mergeInputSignalsIntoContext(input, mode);
+
     // 更新上下文
     this.context.lastQuery = input;
     this.context.turnCount++;
@@ -148,6 +474,13 @@ export class DialogueAgent {
       this.context.history.slice(0, -1),
       mode,
       activeGame,
+      {
+        recommendationIntent: mode === 'recommendation' ? this.context.recommendationState : undefined,
+        recommendationSessionState: mode === 'recommendation' ? cloneRecommendationSessionState(this.context.recommendationState) : undefined,
+        recommendationSessionContext: mode === 'recommendation'
+          ? buildRecommendationStatePrompt(this.context.recommendationState)
+          : undefined,
+      },
     );
 
     if (result.game) {
@@ -177,10 +510,12 @@ export class DialogueAgent {
 
   async processInputStream(
     input: string,
-    mode: 'recommendation' | 'referee' = 'recommendation',
+    mode: ChatMode = 'recommendation',
     activeGame?: Game,
     callbacks: DialogueStreamCallbacks = {},
   ): Promise<RetrievalResult> {
+    this.mergeInputSignalsIntoContext(input, mode);
+
     this.context.lastQuery = input;
     this.context.turnCount++;
     this.context.history.push({ role: 'user', content: input });
@@ -204,6 +539,13 @@ export class DialogueAgent {
       activeGame,
       {
         onReplyUpdate: callbacks.onAnswerUpdate,
+      },
+      {
+        recommendationIntent: mode === 'recommendation' ? this.context.recommendationState : undefined,
+        recommendationSessionState: mode === 'recommendation' ? cloneRecommendationSessionState(this.context.recommendationState) : undefined,
+        recommendationSessionContext: mode === 'recommendation'
+          ? buildRecommendationStatePrompt(this.context.recommendationState)
+          : undefined,
       },
     );
 
@@ -237,19 +579,19 @@ export class DialogueAgent {
 
   // 获取对话上下文
   getContext(): DialogueContext {
-    return { ...this.context };
+    return {
+      ...this.context,
+      preferredTags: [...this.context.preferredTags],
+      mentionedGames: [...this.context.mentionedGames],
+      recommendationState: cloneRecommendationSessionState(this.context.recommendationState),
+      history: this.context.history.map((entry) => ({ ...entry })),
+    };
   }
 
   // 重置会话
   reset(): void {
     this.sessionGames = [];
-    this.context = {
-      preferredTags: [],
-      mentionedGames: [],
-      turnCount: 0,
-      lastQuery: '',
-      history: [],
-    };
+    this.context = createEmptyDialogueContext();
   }
 }
 

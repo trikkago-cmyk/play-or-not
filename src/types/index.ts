@@ -56,6 +56,32 @@ export interface ChatMessage {
   isRefereeMessage?: boolean;
 }
 
+export type RecommendationIntentAction =
+  | 'new'
+  | 'continue'
+  | 'refine'
+  | 'override'
+  | 'switch'
+  | 'reset'
+  | 'smalltalk';
+
+export interface RecommendationSessionState {
+  requestedPlayerCount?: number;
+  requestedPlayerRangeMin?: number;
+  requestedPlayerRangeMax?: number;
+  maxPlaytime?: number;
+  minComplexity?: number;
+  maxComplexity?: number;
+  maxAgeRating?: number;
+  desiredTags: string[];
+  searchTerms: string[];
+  excludedTags: string[];
+  excludedTerms: string[];
+  sourceTurns: string[];
+  lastAction?: RecommendationIntentAction;
+  updatedAt?: number;
+}
+
 export interface ChatSession {
   id: string;
   title: string;

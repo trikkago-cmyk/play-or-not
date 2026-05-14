@@ -4,7 +4,7 @@ import { getBgaPopularitySignal } from '@/data/bgaPopularitySignals';
 import { buildInternalRecommendationContext, buildInternalRefereeContext, type InternalWikiCitation } from './internalWikiService';
 import { hasLocalizedGameTitle, resolveMentionedGameInText } from './gameTextResolver';
 import { getUserMemory } from './memoryService';
-import type { Game, ChatMode } from '@/types';
+import type { Game, ChatMode, RecommendationSessionState } from '@/types';
 
 // API 配置
 interface LLMConfig {
@@ -104,7 +104,7 @@ interface RecommendationCandidate {
   snippets: string[];
 }
 
-interface RecommendationIntent {
+export interface RecommendationIntent {
   requestedPlayerCount?: number;
   requestedPlayerRangeMin?: number;
   requestedPlayerRangeMax?: number;
@@ -114,6 +114,14 @@ interface RecommendationIntent {
   maxAgeRating?: number;
   desiredTags: string[];
   searchTerms: string[];
+  excludedTags?: string[];
+  excludedTerms?: string[];
+}
+
+interface LLMResponseOptions {
+  recommendationIntent?: RecommendationIntent;
+  recommendationSessionState?: RecommendationSessionState;
+  recommendationSessionContext?: string;
 }
 
 interface RecommendationHighlight {
@@ -903,7 +911,7 @@ function parseRequestedComplexityRange(query: string): { min?: number; max?: num
     return { min: 1.4, max: 2.8 };
   }
 
-  if (/(轻策|轻策略|别太重|不要太重|不想太重|别太烧脑|不要太烧脑|别太复杂|不要太复杂|规则简单|简单|新手|上手快)/.test(trimmed)) {
+  if (/(轻策|轻策略|轻松|休闲|轻量|好教|容易教|别太重|不要太重|不想太重|别太烧脑|不要太烧脑|别太复杂|不要太复杂|不要太难|别太难|规则简单|简单|新手|上手快)/.test(trimmed)) {
     return { max: 2.4 };
   }
 
@@ -1165,7 +1173,7 @@ function countGameConceptMatches(game: Game, concepts: string[]): number {
     .length;
 }
 
-function parseRecommendationIntent(query: string): RecommendationIntent {
+export function parseRecommendationIntent(query: string): RecommendationIntent {
   const desiredTags: string[] = [];
   const searchTerms: string[] = [];
   const normalizedQuery = extractPrimaryRecommendationSignal(query);
@@ -1323,7 +1331,7 @@ function parseRecommendationIntent(query: string): RecommendationIntent {
     requestedPlayerCount:
       typeof playerRange.min === 'number' && typeof playerRange.max === 'number'
         ? undefined
-        : parseRequestedPlayerCount(normalizedQuery),
+        : (parseRequestedPlayerCount(normalizedQuery) ?? (/双人|两人|2人/.test(normalizedQuery) ? 2 : undefined)),
     requestedPlayerRangeMin: playerRange.min,
     requestedPlayerRangeMax: playerRange.max,
     maxPlaytime,
@@ -1600,6 +1608,20 @@ function isGameCompatibleWithIntent(game: Game, intent: RecommendationIntent): b
   const structuredTags = getStructuredRecommendationTags(game);
   const wantsFamilyPlay = intent.desiredTags.includes('家庭同乐');
   const wantsLowConflict = intent.desiredTags.includes('低冲突友好');
+  const excludedTerms = uniqueStrings([
+    ...(intent.excludedTags ?? []),
+    ...(intent.excludedTerms ?? []),
+  ]);
+
+  if (excludedTerms.length > 0) {
+    const gameSurface = buildGameKeywordSurface(game);
+    if (excludedTerms.some((term) => {
+      const normalizedTerm = normalizeCompactUserInput(term);
+      return normalizedTerm.length >= 2 && gameSurface.includes(normalizedTerm);
+    })) {
+      return false;
+    }
+  }
 
   if (typeof intent.maxPlaytime === 'number' && game.playtimeMin > intent.maxPlaytime) {
     return false;
@@ -2508,6 +2530,7 @@ async function prepareLlmTurn(
   activeGame?: Game,
   history: { role: 'user' | 'assistant'; content: string }[] = [],
   excludeIds: string[] = [],
+  options: LLMResponseOptions = {},
 ): Promise<PreparedLlmTurn> {
   const currentUserQuestion = extractCurrentUserQuestion(userInput);
   let retrievedRulesContext = '';
@@ -2564,9 +2587,14 @@ async function prepareLlmTurn(
     retrievedRulesContext = evidencePack.contextText;
     retrievedRuleCitations = evidencePack.citations;
   } else if (mode === 'recommendation' && shouldUseKnowledgeRetrieval) {
-    const sessionIntent = resolveRecommendationIntentWithSessionContext(currentUserQuestion, history);
-    recommendationIntent = sessionIntent.intent;
-    recommendationSessionContext = sessionIntent.sessionContextLine ?? '';
+    if (options.recommendationIntent) {
+      recommendationIntent = options.recommendationIntent;
+      recommendationSessionContext = options.recommendationSessionContext ?? '';
+    } else {
+      const sessionIntent = resolveRecommendationIntentWithSessionContext(currentUserQuestion, history);
+      recommendationIntent = sessionIntent.intent;
+      recommendationSessionContext = sessionIntent.sessionContextLine ?? '';
+    }
     recommendationCandidates = buildLocalRecommendationCandidates(currentUserQuestion, recommendationIntent, excludeIds);
     if (recommendationCandidates.length > 0) {
       recommendationContext = formatRecommendationContext(recommendationCandidates, recommendationIntent);
@@ -2792,9 +2820,10 @@ export async function getLLMResponse(
   mode: ChatMode = 'recommendation',
   activeGame?: Game,
   history: { role: 'user' | 'assistant'; content: string }[] = [],
-  excludeIds: string[] = []
+  excludeIds: string[] = [],
+  options: LLMResponseOptions = {},
 ): Promise<{ text: string; gameId?: string; switchMode?: boolean; unknownGame?: string }> {
-  const preparedTurn = await prepareLlmTurn(userInput, mode, activeGame, history, excludeIds);
+  const preparedTurn = await prepareLlmTurn(userInput, mode, activeGame, history, excludeIds, options);
   if (preparedTurn.directAnswer) {
     return {
       text: preparedTurn.directAnswer,
@@ -2832,8 +2861,9 @@ export async function getLLMResponseStream(
   history: { role: 'user' | 'assistant'; content: string }[] = [],
   excludeIds: string[] = [],
   callbacks: LLMResponseStreamCallbacks = {},
+  options: LLMResponseOptions = {},
 ): Promise<{ text: string; gameId?: string; switchMode?: boolean; unknownGame?: string }> {
-  const preparedTurn = await prepareLlmTurn(userInput, mode, activeGame, history, excludeIds);
+  const preparedTurn = await prepareLlmTurn(userInput, mode, activeGame, history, excludeIds, options);
   if (preparedTurn.directAnswer) {
     callbacks.onReplyUpdate?.(preparedTurn.directAnswer);
     return {
@@ -2922,9 +2952,10 @@ export async function getGameRecommendation(
   excludeIds: string[] = [],
   history: { role: 'user' | 'assistant'; content: string }[] = [],
   mode: ChatMode = 'recommendation',
-  activeGame?: Game
+  activeGame?: Game,
+  options: LLMResponseOptions = {},
 ): Promise<{ text: string; game?: Game; switchMode?: boolean }> {
-  const { text, gameId, switchMode, unknownGame } = await getLLMResponse(query, mode, activeGame, history, excludeIds);
+  const { text, gameId, switchMode, unknownGame } = await getLLMResponse(query, mode, activeGame, history, excludeIds, options);
 
   if (unknownGame) {
     try {
@@ -2955,6 +2986,7 @@ export async function getGameRecommendationStream(
   mode: ChatMode = 'recommendation',
   activeGame?: Game,
   callbacks: LLMResponseStreamCallbacks = {},
+  options: LLMResponseOptions = {},
 ): Promise<{ text: string; game?: Game; switchMode?: boolean }> {
   const { text, gameId, switchMode, unknownGame } = await getLLMResponseStream(
     query,
@@ -2963,6 +2995,7 @@ export async function getGameRecommendationStream(
     history,
     excludeIds,
     callbacks,
+    options,
   );
 
   if (unknownGame) {
