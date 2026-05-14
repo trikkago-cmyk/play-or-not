@@ -1,11 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type MouseEvent } from 'react';
 import { Send, History, User, ChevronLeft, ChevronRight, MessageSquarePlus, Scale, Mic, Volume2, VolumeX } from 'lucide-react';
 import type { Game, ChatMessage } from '@/types';
 import GameCard from '@/components/GameCard';
 import MiniGameCard from '@/components/MiniGameCard';
 import { dialogueAgent, isRefereeRecommendationSwitchRequest } from '@/services/ragService';
 import { isMockMode, setMockMode, saveLLMConfig, initLLMConfig } from '@/services/llmService';
-import { getDmTtsEnabled, hasDmTtsPrimedPlayback, isDmTtsSupported, preloadDmVoices, primeDmTtsPlayback, setDmTtsEnabled, speakAsDm, stopDmTtsPlayback } from '@/services/dmTtsService';
+import { cancelDmTtsPrefetch, getDmTtsEnabled, hasDmTtsPrimedPlayback, isDmTtsSupported, playPreparedDmTtsPlayback, prepareDmTtsPlayback, type PreparedDmTtsPlayback, preloadDmVoices, primeDmTtsPlayback, setDmTtsEnabled, speakAsDm, stopDmTtsPlayback } from '@/services/dmTtsService';
+import { collectFinalSpeechSegments, collectStablePreviewSpeechSegments, mergeSpeechSegments } from '@/services/streamedTtsUtils';
 import { mockGames } from '@/data/mockData';
 import { MarkdownText } from '@/components/MarkdownText';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,47 @@ interface ChatPageProps {
 }
 
 const INITIAL_MESSAGE = '嘿！我是你的桌游DM。\n今天几个人？想玩点什么感觉的？';
+
+type StreamedSpeechQueueItem = {
+  id: string;
+  messageId: string;
+  text: string;
+  status: 'queued' | 'preparing' | 'ready' | 'playing' | 'done' | 'failed';
+  preparedPlayback: PreparedDmTtsPlayback | null;
+  preparePromise: Promise<PreparedDmTtsPlayback | null> | null;
+};
+
+type StreamedSpeechQueueState = {
+  generation: number;
+  messageId: string | null;
+  previewText: string;
+  consumedLength: number;
+  carrySegment: string;
+  items: StreamedSpeechQueueItem[];
+  nextSegmentIndex: number;
+  processing: boolean;
+  streamHandled: boolean;
+  finalized: boolean;
+};
+
+function createEmptyStreamedSpeechQueueState(
+  generation: number,
+  messageId: string | null = null,
+): StreamedSpeechQueueState {
+  return {
+    generation,
+    messageId,
+    previewText: '',
+    consumedLength: 0,
+    carrySegment: '',
+    items: [],
+    nextSegmentIndex: 0,
+    processing: false,
+    streamHandled: false,
+    finalized: false,
+  };
+}
+
 // 场景标签
 const scenarioTags = [
   { icon: '💕', label: '情侣约会' },
@@ -97,6 +139,9 @@ export default function ChatPage({
     new Set((initialMessages || []).filter((message) => message.role === 'assistant').map((message) => message.id)),
   );
   const speakingAssistantMessageIdsRef = useRef<Set<string>>(new Set());
+  const streamedSpeechQueueRef = useRef<StreamedSpeechQueueState>(createEmptyStreamedSpeechQueueState(0));
+  const longPressTimerRef = useRef<number | null>(null);
+  const [activeTtsControlsMessageId, setActiveTtsControlsMessageId] = useState<string | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || []);
 
@@ -114,9 +159,14 @@ export default function ChatPage({
     void preloadDmVoices();
 
     return () => {
+      cancelDmTtsPrefetch();
       stopDmTtsPlayback();
     };
   }, [ttsSupported]);
+
+  useEffect(() => () => {
+    clearLongPressTimer();
+  }, []);
 
   useEffect(() => {
     if (!ttsSupported || !ttsEnabled || hasDmTtsPrimedPlayback()) {
@@ -141,6 +191,19 @@ export default function ChatPage({
       document.removeEventListener('keydown', unlockPlayback, true);
     };
   }, [ttsEnabled, ttsSupported]);
+
+  useEffect(() => {
+    if (ttsEnabled) {
+      return;
+    }
+
+    streamedSpeechQueueRef.current = createEmptyStreamedSpeechQueueState(
+      streamedSpeechQueueRef.current.generation + 1,
+    );
+    speakingAssistantMessageIdsRef.current.clear();
+    cancelDmTtsPrefetch();
+    stopDmTtsPlayback();
+  }, [ttsEnabled]);
 
   useEffect(() => {
     const textarea = inputRef.current;
@@ -250,6 +313,7 @@ export default function ChatPage({
     const latestAssistantMessage = [...messages].reverse().find(
       (message) => message.role === 'assistant'
         && !message.isStreaming
+        && !message.streamTtsHandled
         && message.content.trim().length > 0
         && !spokenAssistantMessageIdsRef.current.has(message.id)
         && !speakingAssistantMessageIdsRef.current.has(message.id),
@@ -261,13 +325,279 @@ export default function ChatPage({
 
     speakingAssistantMessageIdsRef.current.add(latestAssistantMessage.id);
 
-    void speakAsDm(latestAssistantMessage.content).then((didSpeak) => {
+    void speakAsDm(latestAssistantMessage.content, {
+      requestKey: latestAssistantMessage.id,
+    }).then((didSpeak) => {
       speakingAssistantMessageIdsRef.current.delete(latestAssistantMessage.id);
       if (didSpeak) {
         spokenAssistantMessageIdsRef.current.add(latestAssistantMessage.id);
       }
     });
   }, [messages, ttsEnabled, ttsSupported, ttsReplayNonce]);
+
+  const ensureStreamedSpeechQueue = (messageId: string) => {
+    const current = streamedSpeechQueueRef.current;
+    if (current.messageId === messageId) {
+      return current;
+    }
+
+    const nextState = createEmptyStreamedSpeechQueueState(current.generation + 1, messageId);
+    streamedSpeechQueueRef.current = nextState;
+    return nextState;
+  };
+
+  const resetStreamedSpeechQueue = (messageId?: string | null) => {
+    streamedSpeechQueueRef.current = createEmptyStreamedSpeechQueueState(
+      streamedSpeechQueueRef.current.generation + 1,
+      messageId ?? null,
+    );
+  };
+
+  const markStreamedSpeechSettled = (messageId: string) => {
+    const state = streamedSpeechQueueRef.current;
+    if (
+      state.messageId !== messageId
+      || !state.streamHandled
+      || !state.finalized
+      || state.processing
+      || state.items.some((item) => ['queued', 'preparing', 'ready', 'playing'].includes(item.status))
+    ) {
+      return;
+    }
+
+    speakingAssistantMessageIdsRef.current.delete(messageId);
+    spokenAssistantMessageIdsRef.current.add(messageId);
+  };
+
+  const ensurePreparedSpeechItem = (
+    item: StreamedSpeechQueueItem,
+    generation: number,
+  ) => {
+    if (item.preparedPlayback) {
+      return Promise.resolve(item.preparedPlayback);
+    }
+
+    if (item.preparePromise) {
+      return item.preparePromise;
+    }
+
+    item.status = 'preparing';
+    item.preparePromise = prepareDmTtsPlayback(item.text, {
+      force: true,
+      allowBrowserFallback: false,
+    }).then((preparedPlayback) => {
+      const state = streamedSpeechQueueRef.current;
+      if (state.generation !== generation || state.messageId !== item.messageId) {
+        return null;
+      }
+
+      item.preparedPlayback = preparedPlayback;
+      item.status = preparedPlayback ? 'ready' : 'failed';
+      return preparedPlayback;
+    }).catch(() => {
+      const state = streamedSpeechQueueRef.current;
+      if (state.generation === generation && state.messageId === item.messageId) {
+        item.status = 'failed';
+      }
+      return null;
+    }).finally(() => {
+      const state = streamedSpeechQueueRef.current;
+      if (state.generation === generation && state.messageId === item.messageId) {
+        item.preparePromise = null;
+      }
+    });
+
+    return item.preparePromise;
+  };
+
+  const pumpStreamedSpeechQueue = async (messageId: string) => {
+    const state = streamedSpeechQueueRef.current;
+    if (!ttsEnabled || !ttsSupported || state.processing || state.messageId !== messageId) {
+      return;
+    }
+
+    const nextItem = state.items.find((item) => ['queued', 'preparing', 'ready'].includes(item.status));
+    if (!nextItem) {
+      markStreamedSpeechSettled(messageId);
+      return;
+    }
+
+    const generation = state.generation;
+    state.processing = true;
+
+    try {
+      const preparedPlayback = await ensurePreparedSpeechItem(nextItem, generation);
+      const latestState = streamedSpeechQueueRef.current;
+      if (latestState.generation !== generation || latestState.messageId !== messageId) {
+        return;
+      }
+
+      if (!preparedPlayback) {
+        nextItem.status = 'failed';
+        return;
+      }
+
+      nextItem.status = 'playing';
+      const didPlay = await playPreparedDmTtsPlayback(preparedPlayback, {
+        cancelCurrent: false,
+      });
+      const afterPlaybackState = streamedSpeechQueueRef.current;
+      if (afterPlaybackState.generation !== generation || afterPlaybackState.messageId !== messageId) {
+        return;
+      }
+
+      nextItem.status = didPlay ? 'done' : 'failed';
+    } finally {
+      const latestState = streamedSpeechQueueRef.current;
+      if (latestState.generation === generation && latestState.messageId === messageId) {
+        latestState.processing = false;
+      }
+    }
+
+    const latestState = streamedSpeechQueueRef.current;
+    if (latestState.generation !== generation || latestState.messageId !== messageId) {
+      return;
+    }
+
+    markStreamedSpeechSettled(messageId);
+    void pumpStreamedSpeechQueue(messageId);
+  };
+
+  const enqueueStreamedSpeechSegments = (
+    messageId: string,
+    segments: string[],
+  ) => {
+    if (!ttsEnabled || !ttsSupported) {
+      return false;
+    }
+
+    const normalizedSegments = segments
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    if (normalizedSegments.length === 0) {
+      return false;
+    }
+
+    const state = ensureStreamedSpeechQueue(messageId);
+    const existingTexts = new Set(state.items.map((item) => item.text));
+    let didQueue = false;
+
+    for (const segment of normalizedSegments) {
+      if (existingTexts.has(segment)) {
+        continue;
+      }
+
+      state.items.push({
+        id: `${messageId}:tts:${state.nextSegmentIndex}`,
+        messageId,
+        text: segment,
+        status: 'queued',
+        preparedPlayback: null,
+        preparePromise: null,
+      });
+      state.nextSegmentIndex += 1;
+      existingTexts.add(segment);
+      didQueue = true;
+    }
+
+    if (!didQueue) {
+      return false;
+    }
+
+    state.streamHandled = true;
+    speakingAssistantMessageIdsRef.current.add(messageId);
+    void pumpStreamedSpeechQueue(messageId);
+    return true;
+  };
+
+  const handleStreamedAssistantPreview = (messageId: string, previewText: string) => {
+    if (!ttsEnabled || !ttsSupported) {
+      return;
+    }
+
+    let state = ensureStreamedSpeechQueue(messageId);
+    const {
+      didResetConsumedLength,
+      segments,
+      nextConsumedLength,
+    } = collectStablePreviewSpeechSegments(
+      previewText,
+      state.previewText,
+      state.consumedLength,
+    );
+
+    if (didResetConsumedLength) {
+      cancelDmTtsPrefetch();
+      stopDmTtsPlayback();
+      resetStreamedSpeechQueue(messageId);
+      state = ensureStreamedSpeechQueue(messageId);
+      speakingAssistantMessageIdsRef.current.add(messageId);
+    }
+
+    const merged = mergeSpeechSegments(segments, state.carrySegment);
+    state.previewText = previewText;
+    state.consumedLength = nextConsumedLength;
+    state.carrySegment = merged.carrySegment;
+
+    void enqueueStreamedSpeechSegments(messageId, merged.segments);
+  };
+
+  const finalizeStreamedAssistantSpeech = (messageId: string, finalText: string) => {
+    if (!ttsEnabled || !ttsSupported) {
+      return false;
+    }
+
+    let state = ensureStreamedSpeechQueue(messageId);
+    const {
+      didResetConsumedLength,
+      segments,
+      remainingText,
+    } = collectFinalSpeechSegments(
+      finalText,
+      state.previewText,
+      state.consumedLength,
+    );
+
+    if (didResetConsumedLength) {
+      cancelDmTtsPrefetch();
+      stopDmTtsPlayback();
+      resetStreamedSpeechQueue(messageId);
+      state = ensureStreamedSpeechQueue(messageId);
+      speakingAssistantMessageIdsRef.current.add(messageId);
+    }
+
+    const finalSegments = [...segments];
+    if (remainingText.trim()) {
+      finalSegments.push(remainingText.trim());
+    }
+
+    const merged = mergeSpeechSegments(finalSegments, state.carrySegment, {
+      final: true,
+    });
+
+    state.previewText = finalText;
+    state.consumedLength = finalText.length;
+    state.carrySegment = '';
+    state.finalized = true;
+
+    const didQueue = enqueueStreamedSpeechSegments(messageId, merged.segments);
+    markStreamedSpeechSettled(messageId);
+    return didQueue || state.streamHandled;
+  };
+
+  const abandonCurrentAssistantSpeech = () => {
+    messages.forEach((message) => {
+      if (message.role === 'assistant') {
+        spokenAssistantMessageIdsRef.current.add(message.id);
+      }
+    });
+
+    resetStreamedSpeechQueue();
+    speakingAssistantMessageIdsRef.current.clear();
+    cancelDmTtsPrefetch();
+    stopDmTtsPlayback();
+  };
 
   const runDialogueTurn = async ({
     userVisibleText,
@@ -282,6 +612,8 @@ export default function ChatPage({
     refereeGame?: Game;
     isRefereeMessage?: boolean;
   }) => {
+    abandonCurrentAssistantSpeech();
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -296,9 +628,11 @@ export default function ChatPage({
       timestamp: Date.now(),
       isStreaming: true,
       isRefereeMessage,
+      streamTtsHandled: false,
     };
     let hasInsertedAssistantMessage = false;
 
+    resetStreamedSpeechQueue(assistantId);
     setMessages((prev) => [...prev, userMessage]);
     setIsProcessing(true);
     setIsAwaitingAssistantOutput(true);
@@ -316,22 +650,25 @@ export default function ChatPage({
               ...prev,
               {
                 ...assistantPlaceholder,
-                content: partialText,
-              },
-            ]);
-          } else {
+              content: partialText,
+            },
+          ]);
+        } else {
             updateAssistantMessage(assistantId, (message) => ({
               ...message,
               content: partialText,
               isStreaming: true,
+              streamTtsHandled: false,
             }));
           }
 
+          handleStreamedAssistantPreview(assistantId, partialText);
           setIsAwaitingAssistantOutput(false);
         },
       });
 
       const shouldAttachGameCard = result.games.length > 0 && (turnMode === 'recommendation' || result.switchMode);
+      const streamTtsHandled = finalizeStreamedAssistantSpeech(assistantId, result.answer);
       if (!hasInsertedAssistantMessage) {
         hasInsertedAssistantMessage = true;
         setMessages((prev) => [
@@ -342,6 +679,7 @@ export default function ChatPage({
             isStreaming: false,
             gameCard: shouldAttachGameCard ? result.games[0] : undefined,
             isRefereeMessage: result.switchMode ? false : isRefereeMessage,
+            streamTtsHandled,
           },
         ]);
       } else {
@@ -351,6 +689,7 @@ export default function ChatPage({
           isStreaming: false,
           gameCard: shouldAttachGameCard ? result.games[0] : undefined,
           isRefereeMessage: result.switchMode ? false : isRefereeMessage,
+          streamTtsHandled,
         }));
       }
 
@@ -814,6 +1153,7 @@ export default function ChatPage({
 
   // "换一批" - 在对话流中新增一批横向卡片
   const handleNextBatch = async () => {
+    abandonCurrentAssistantSpeech();
     setIsProcessing(true);
     const shownIds = dialogueAgent.getSessionGames();
 
@@ -849,14 +1189,17 @@ export default function ChatPage({
 
   // 从批量视图中选择一个游戏 - 直接跳转到详情页
   const handleSelectFromBatch = (game: Game) => {
+    abandonCurrentAssistantSpeech();
     onNavigateToGameDetail(game.id);
   };
 
   const handlePlayThis = (gameId: string) => {
+    abandonCurrentAssistantSpeech();
     onNavigateToGameDetail(gameId);
   };
 
   const handleNewSession = () => {
+    abandonCurrentAssistantSpeech();
     // Reset agent memory!
     dialogueAgent.reset();
 
@@ -865,6 +1208,16 @@ export default function ChatPage({
 
     // Notify parent to create new session ID - this will force remount via key prop
     onNewSession();
+  };
+
+  const handleNavigateToProfile = () => {
+    abandonCurrentAssistantSpeech();
+    onNavigateToProfile();
+  };
+
+  const handleNavigateToHistory = () => {
+    abandonCurrentAssistantSpeech();
+    onNavigateToHistory();
   };
 
   // 切换LLM模式
@@ -901,6 +1254,51 @@ export default function ChatPage({
         setTtsReplayNonce((prev) => prev + 1);
       });
     }
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleAssistantBubblePointerDown = (messageId: string) => {
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      setActiveTtsControlsMessageId(messageId);
+      longPressTimerRef.current = null;
+    }, 450);
+  };
+
+  const handleAssistantBubbleContextMenu = (event: MouseEvent, messageId: string) => {
+    event.preventDefault();
+    clearLongPressTimer();
+    setActiveTtsControlsMessageId(messageId);
+  };
+
+  const handleReplayAssistantMessage = (message: ChatMessage) => {
+    if (!message.content.trim()) {
+      return;
+    }
+
+    setActiveTtsControlsMessageId(message.id);
+    spokenAssistantMessageIdsRef.current.add(message.id);
+    speakingAssistantMessageIdsRef.current.add(message.id);
+    cancelDmTtsPrefetch();
+    stopDmTtsPlayback();
+    void speakAsDm(message.content, {
+      force: true,
+      requestKey: `manual:${message.id}:${Date.now()}`,
+    }).finally(() => {
+      speakingAssistantMessageIdsRef.current.delete(message.id);
+    });
+  };
+
+  const handlePauseAssistantSpeech = () => {
+    speakingAssistantMessageIdsRef.current.clear();
+    cancelDmTtsPrefetch();
+    stopDmTtsPlayback();
   };
 
   const showTypingIndicator = isTyping && messages.length === 0;
@@ -956,13 +1354,44 @@ export default function ChatPage({
               <div className={`
                   relative max-w-[85%] p-4 rounded-2xl text-sm font-medium leading-relaxed
                   bg-white text-gray-800 rounded-tl-none border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]
-                `}>
+                `}
+                onPointerDown={() => handleAssistantBubblePointerDown(message.id)}
+                onPointerUp={clearLongPressTimer}
+                onPointerCancel={clearLongPressTimer}
+                onPointerLeave={clearLongPressTimer}
+                onContextMenu={(event) => handleAssistantBubbleContextMenu(event, message.id)}
+              >
                 {isStreamingAssistant ? (
                   <MarkdownText content={message.content} className="min-h-[1.5em]" showCursor />
                 ) : (
                   <MarkdownText content={message.content} />
                 )}
               </div>
+
+              {activeTtsControlsMessageId === message.id && message.content.trim().length > 0 && (
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!ttsSupported}
+                    onClick={() => handleReplayAssistantMessage(message)}
+                    className="h-8 rounded-full border-black bg-white px-3 text-xs font-bold"
+                  >
+                    重读
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!ttsSupported}
+                    onClick={handlePauseAssistantSpeech}
+                    className="h-8 rounded-full border-black bg-white px-3 text-xs font-bold"
+                  >
+                    暂停
+                  </Button>
+                </div>
+              )}
 
               {/* Game Card */}
               {shouldShowGameCard && (
@@ -1075,7 +1504,7 @@ export default function ChatPage({
           {mode === 'recommendation' && (
             <div className="flex gap-2">
               <Button
-                onClick={onNavigateToProfile}
+                onClick={handleNavigateToProfile}
                 variant="ghost"
                 size="icon"
                 title="我的档案"
@@ -1313,7 +1742,7 @@ export default function ChatPage({
         <div className="flex justify-center mt-3">
           <Button
             variant="ghost"
-            onClick={onNavigateToHistory}
+            onClick={handleNavigateToHistory}
             className="text-xs text-gray-500 gap-1 h-8 px-2 rounded-full"
           >
             <History className="w-3.5 h-3.5" />

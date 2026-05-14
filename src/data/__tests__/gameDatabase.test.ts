@@ -39,6 +39,12 @@ describe('gameDatabase cover completeness', () => {
 });
 
 describe('gameDatabase localization and referee readiness', () => {
+  it('uses the accepted Chinese title for Blood on the Clocktower', () => {
+    const clocktower = GAME_DATABASE.find((game) => game.id === 'blood-on-the-clocktower');
+
+    expect(clocktower?.titleCn).toBe('血染钟楼');
+  });
+
   it('requires user-facing Chinese titles for every shipped game', () => {
     const untranslatedGames = GAME_DATABASE.filter(
       (game) => !CJK_TITLE_PATTERN.test(game.titleCn),

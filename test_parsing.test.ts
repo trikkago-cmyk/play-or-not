@@ -102,16 +102,16 @@ describe('LLM Response Parsing Golden Datasets', () => {
     it('Golden Dataset 4: Should return unknownGame field if target game is not in database', async () => {
         const payload = {
             thought: "用户询问的游戏不在库中",
-            reply: "抱歉，本地库中没有《血染钟楼》。这是一款基于狼人杀的进阶游戏...",
+            reply: "抱歉，本地库中没有《月影秘术》。这是一款虚构的测试游戏...",
             recommendation_id: null,
-            unknown_target_game: "血染钟楼"
+            unknown_target_game: "月影秘术"
         };
 
         (global.fetch as any).mockImplementation(() => createMockResponse(payload));
 
-        const result = await getLLMResponse('教我玩血染钟楼', 'recommendation');
+        const result = await getLLMResponse('教我玩月影秘术', 'recommendation');
 
-        expect(result.unknownGame).toBe('血染钟楼');
+        expect(result.unknownGame).toBe('月影秘术');
         expect(result.gameId).toBeNull();
     });
 });

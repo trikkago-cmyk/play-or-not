@@ -38,12 +38,35 @@ type BrowserSpeechSynthesis = SpeechSynthesis & {
   removeEventListener?: (type: 'voiceschanged', listener: () => void) => void;
 };
 
+type DmSpeakOptions = {
+  preferredVoiceURI?: string;
+  force?: boolean;
+  requestKey?: string;
+};
+
+export type PreparedDmTtsPlayback =
+  | {
+      kind: 'remote-audio';
+      audioBlob: Blob;
+    }
+  | {
+      kind: 'browser-speech';
+      utterance: SpeechSynthesisUtterance;
+      speech: SpeechSynthesis;
+    };
+
 let activeSpeakToken = 0;
 let voicesReadyPromise: Promise<SpeechSynthesisVoice[]> | null = null;
 let hasPrimedDmTtsPlayback = false;
-let pendingSpeakRequest: { rawText: string; options: { preferredVoiceURI?: string; force?: boolean } } | null = null;
+let pendingSpeakRequest: { rawText: string; options: DmSpeakOptions } | null = null;
+let activeSpeakRequest: {
+  requestKey: string | null;
+  speakToken: number;
+  promise: Promise<boolean>;
+} | null = null;
 let activeAudioElement: HTMLAudioElement | null = null;
 let activeAudioObjectUrl: string | null = null;
+let activeAudioAbort: (() => void) | null = null;
 let activeFetchController: AbortController | null = null;
 let remoteTtsCooldownUntil = 0;
 
@@ -291,13 +314,14 @@ export async function primeDmTtsPlayback(): Promise<boolean> {
 
 export async function speakAsDm(
   rawText: string,
-  options: {
-    preferredVoiceURI?: string;
-    force?: boolean;
-  } = {},
+  options: DmSpeakOptions = {},
 ): Promise<boolean> {
   if (!isDmTtsSupported()) {
     return false;
+  }
+
+  if (options.requestKey && activeSpeakRequest?.requestKey === options.requestKey) {
+    return await activeSpeakRequest.promise;
   }
 
   const normalizedText = buildSpeakableMessage(rawText);
@@ -317,34 +341,73 @@ export async function speakAsDm(
   const speakToken = ++activeSpeakToken;
   cancelActivePlayback();
 
-  const remoteAudioBlob = await fetchRemoteTtsAudio(normalizedText);
-  if (speakToken !== activeSpeakToken) {
-    return false;
-  }
+  const speakPromise = (async () => {
+    try {
+      const preparedPlayback = await prepareDmTtsPlayback(normalizedText, {
+        preferredVoiceURI: options.preferredVoiceURI,
+        force: true,
+      });
+      if (!preparedPlayback || speakToken !== activeSpeakToken) {
+        return false;
+      }
 
-  if (remoteAudioBlob) {
-    const didPlayRemoteAudio = await playRemoteAudioBlob(remoteAudioBlob, speakToken);
-    if (didPlayRemoteAudio) {
-      return true;
+      const didSpeak = await playPreparedDmTtsPlayback(preparedPlayback, {
+        speakToken,
+        cancelCurrent: false,
+      });
+
+      if (didSpeak && pendingSpeakRequest?.rawText === rawText) {
+        pendingSpeakRequest = null;
+      }
+
+      return didSpeak;
+    } finally {
+      if (activeSpeakRequest?.speakToken === speakToken) {
+        activeSpeakRequest = null;
+      }
     }
+  })();
+
+  activeSpeakRequest = {
+    requestKey: options.requestKey ?? null,
+    speakToken,
+    promise: speakPromise,
+  };
+
+  return await speakPromise;
+}
+
+export async function prepareDmTtsPlayback(
+  rawText: string,
+  options: DmSpeakOptions & { allowBrowserFallback?: boolean } = {},
+): Promise<PreparedDmTtsPlayback | null> {
+  if (!isDmTtsSupported()) {
+    return null;
   }
 
-  if (!shouldAllowBrowserSpeechFallback()) {
-    return false;
+  const normalizedText = buildSpeakableMessage(rawText);
+  if (!normalizedText) {
+    return null;
   }
 
-  if (!canUseBrowserSpeechSynthesis()) {
-    return false;
+  if (!options.force && !getDmTtsEnabled()) {
+    return null;
+  }
+
+  const remoteAudioBlob = await fetchRemoteTtsAudio(normalizedText);
+  if (remoteAudioBlob) {
+    return {
+      kind: 'remote-audio',
+      audioBlob: remoteAudioBlob,
+    };
+  }
+
+  if (!(options.allowBrowserFallback ?? true) || !shouldAllowBrowserSpeechFallback() || !canUseBrowserSpeechSynthesis()) {
+    return null;
   }
 
   const voices = await preloadDmVoices();
-  if (speakToken !== activeSpeakToken) {
-    return false;
-  }
-
   const speech = window.speechSynthesis;
-  speech.cancel();
-
   const utterance = new window.SpeechSynthesisUtterance(normalizedText);
   const voice = pickBestDmVoice(voices, options.preferredVoiceURI);
 
@@ -359,12 +422,50 @@ export async function speakAsDm(
   utterance.pitch = 1.08;
   utterance.volume = 1;
 
-  return await playBrowserSpeechUtterance(utterance, speech);
+  return {
+    kind: 'browser-speech',
+    utterance,
+    speech,
+  };
+}
+
+export async function playPreparedDmTtsPlayback(
+  playback: PreparedDmTtsPlayback,
+  options: {
+    speakToken?: number;
+    cancelCurrent?: boolean;
+  } = {},
+): Promise<boolean> {
+  const speakToken = options.speakToken ?? ++activeSpeakToken;
+
+  if (options.cancelCurrent ?? true) {
+    cancelActivePlayback();
+  }
+
+  if (speakToken !== activeSpeakToken) {
+    return false;
+  }
+
+  if (playback.kind === 'remote-audio') {
+    return await playRemoteAudioBlob(playback.audioBlob, speakToken);
+  }
+
+  if (options.cancelCurrent ?? true) {
+    playback.speech.cancel();
+  }
+
+  return await playBrowserSpeechUtterance(playback.utterance, playback.speech);
+}
+
+export function cancelDmTtsPrefetch() {
+  // The release recovery path prepares streamed chunks on demand; this hook keeps callers
+  // able to cancel older experimental prefetch work without requiring a separate cache.
 }
 
 export function stopDmTtsPlayback() {
   activeSpeakToken += 1;
   pendingSpeakRequest = null;
+  activeSpeakRequest = null;
   cancelActivePlayback();
 }
 
@@ -373,6 +474,7 @@ export function resetDmTtsStateForTests() {
   voicesReadyPromise = null;
   hasPrimedDmTtsPlayback = false;
   pendingSpeakRequest = null;
+  activeSpeakRequest = null;
   remoteTtsCooldownUntil = 0;
   cancelActivePlayback();
 }
@@ -497,6 +599,11 @@ function cancelActivePlayback() {
     activeFetchController = null;
   }
 
+  if (activeAudioAbort) {
+    activeAudioAbort();
+    activeAudioAbort = null;
+  }
+
   if (activeAudioElement) {
     activeAudioElement.pause();
     activeAudioElement.src = '';
@@ -586,11 +693,22 @@ async function playRemoteAudioBlob(audioBlob: Blob, speakToken: number): Promise
         activeAudioObjectUrl = null;
       }
 
+      if (activeAudioAbort === abortPlayback) {
+        activeAudioAbort = null;
+      }
+
       resolve(ok);
     };
 
+    const abortPlayback = () => finalize(false);
+    activeAudioAbort = abortPlayback;
     audio.onended = () => finalize(true);
     audio.onerror = () => finalize(false);
+    audio.onpause = () => {
+      if (speakToken !== activeSpeakToken) {
+        finalize(false);
+      }
+    };
 
     try {
       if (speakToken !== activeSpeakToken) {

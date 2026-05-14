@@ -1741,7 +1741,7 @@ const RAW_GAME_DATABASE: Game[] = [
   },
   {
     id: 'blood-on-the-clocktower',
-    titleCn: '染血钟楼',
+    titleCn: '血染钟楼',
     titleEn: 'Blood on the Clocktower',
     bilibiliId: 'BV1Ei4y1m7hd',
     coverUrl: '/game-covers/blood-on-the-clocktower.jpg',
@@ -1797,7 +1797,7 @@ const RAW_GAME_DATABASE: Game[] = [
 ## 4. 中毒与醉酒
 - 这两种状态的核心影响都是：**你的角色能力不再可靠**。
 - 你可能会收到错误信息，也可能以为自己能力生效了，但其实结果已经被扭曲。
-- 所以在染血钟楼里，**信息冲突并不等于有人一定在撒谎**，也可能是状态效果在作祟。
+- 所以在血染钟楼里，**信息冲突并不等于有人一定在撒谎**，也可能是状态效果在作祟。
 
 ## 5. 和狼人杀最大的不同
 - 死亡后仍能继续参与讨论。

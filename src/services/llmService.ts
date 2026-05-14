@@ -180,7 +180,7 @@ function sanitizeRecommendationEvidenceText(text: string): string {
 }
 
 function sanitizeRecommendationReplyText(text: string): string {
-  return text
+  return normalizeKnownGameTitleVariants(text)
     .replace(/按你刚才这句，我先回到当前召回里最稳的一款[:：]?/g, '按你这局的需求，我先给你落一款更贴的：')
     .replace(/我直接给你推荐召回中最稳的这一句[:：]?/g, '这局我先给你落这款：')
     .replace(/当前召回里最稳的一款[:：]?/g, '这局更贴的一款：')
@@ -195,8 +195,16 @@ function sanitizeRecommendationReplyText(text: string): string {
     .trim();
 }
 
-function sanitizeRefereeReplyText(text: string): string {
+function normalizeKnownGameTitleVariants(text: string): string {
   return text
+    .replace(/染血钟\s*tower/gi, '血染钟楼')
+    .replace(/染血钟\s*Tower/g, '血染钟楼')
+    .replace(/染血钟楼/g, '血染钟楼')
+    .replace(/Blood\s+on\s+the\s+Clocktower/gi, '血染钟楼');
+}
+
+function sanitizeRefereeReplyText(text: string): string {
+  return normalizeKnownGameTitleVariants(text)
     .replace(/\[证据\d+\]/g, '')
     .replace(/(?:^|\n)\s*关于《[^》]+》[^：:\n]*[：:]\s*/g, '\n')
     .replace(/\n\s*如果是具体的规则细节[\s\S]*$/g, '')
@@ -2690,7 +2698,7 @@ function finalizeLlmResponse(
   if (parsedResult) {
     if (mode === 'recommendation') {
       let finalId = parsedResult.recommendation_id;
-      const recName = parsedResult.recommendation_name;
+      const recName = normalizeKnownGameTitleVariants(parsedResult.recommendation_name || '');
       const allowedCandidateIds = new Set(recommendationCandidates.map((candidate) => candidate.game.id));
 
       const text = sanitizeRecommendationReplyText(

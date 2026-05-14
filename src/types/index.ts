@@ -50,6 +50,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   isStreaming?: boolean;
+  streamTtsHandled?: boolean;
   gameCard?: Game;
   batchCards?: Game[];
   quickChips?: string[];

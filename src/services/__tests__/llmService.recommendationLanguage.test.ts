@@ -430,4 +430,50 @@ describe('llmService recommendation language guardrail', () => {
     expect(systemPrompt).toContain('不要在同一轮里同时推荐多款游戏');
     expect(systemPrompt).not.toContain('2 到 3 款** 本地库游戏');
   });
+
+  it('normalizes known bad Clocktower title variants before showing the reply', async () => {
+    (globalThis.fetch as any).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/rag')) {
+        return {
+          ok: true,
+          json: async () => ({ hits: [] }),
+        } as Response;
+      }
+
+      if (url.includes('/api/chat')) {
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  reply: '这局我会推 **《染血钟tower》**。九个人一起互相盘身份，死了也不离桌，整晚都会有人憋笑和甩锅。',
+                  recommendation_name: '染血钟楼',
+                  recommendation_id: 'blood-on-the-clocktower',
+                }),
+              },
+            }],
+          }),
+        } as Response;
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    const result = await getLLMResponse(
+      '九人局想玩嘴炮和阵营推理，最好热闹一点',
+      'recommendation',
+      undefined,
+      [],
+      [],
+    );
+
+    expect(result.gameId).toBe('blood-on-the-clocktower');
+    expect(result.text).toContain('**《血染钟楼》**');
+    expect(result.text).not.toContain('染血钟楼');
+    expect(result.text).not.toContain('染血钟tower');
+    expect(result.text).not.toContain('Blood on the Clocktower');
+  });
 });

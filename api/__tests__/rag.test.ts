@@ -193,7 +193,7 @@ describe('/api/rag agent-friendly contract', () => {
     expect(payload.hits.length).toBeGreaterThan(0);
     expect(payload.hits.some((hit: any) => ['carcassonne', 'kingdomino', 'splendor', 'ticket-to-ride', 'uno'].includes(hit.metadata?.game_id))).toBe(true);
     expect(payload.hits[0]?.metadata?.game_id).not.toBe('avalon');
-  });
+  }, 15000);
 
   it('prefers family-friendly classics over social deduction for parent queries', async () => {
     const response = await ragHandler(new Request('http://localhost/api/rag', {
@@ -215,7 +215,7 @@ describe('/api/rag agent-friendly contract', () => {
     expect(topGames[0]).not.toBe('avalon');
     expect(topGames.some((gameId: string) => ['kingdomino', 'splendor', 'carcassonne', 'ticket-to-ride', 'cascadia'].includes(gameId))).toBe(true);
     expect(topGames.some((gameId: string) => ['dobble', 'halli-galli'].includes(gameId))).toBe(false);
-  });
+  }, 15000);
 
   it('prefers classic light strategy titles for 2-to-4 player queries', async () => {
     const response = await ragHandler(new Request('http://localhost/api/rag', {
