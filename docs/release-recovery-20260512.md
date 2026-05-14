@@ -396,3 +396,10 @@
   - after moving `api/chat` to `nodejs` and setting `maxDuration: 60`, `stream: false` still timed out and `stream: true` did not emit the first bytes within a `40s` curl window
   - resolution: the previous preview was **not acceptance-ready**, but the new Edge-runtime preview has passed direct `/api/chat`, streaming, and TTS smoke checks with `deepseek-v3-2-251201` as the default
   - remaining validation: user-facing frontend journey still needs manual acceptance, especially exact greeting behavior and one-game recommendation card timing
+- Latest Ark Web Search activation check on `https://play-or-not-hqpbzhao8-trikkagos-projects.vercel.app`:
+  - `POST /api/chat` with `tools: [{ type: "web_search", max_keyword: 2 }]` returns `200`
+  - response headers confirm `x-llm-model: deepseek-v3-2-251201`
+  - response headers confirm `x-llm-upstream-format: ark_responses`
+  - response headers still include `x-llm-web-search: unavailable_tool_retry`
+  - interpretation: code-level Ark Responses tool passthrough is wired, but the Volcengine account has not activated the Web Search service component yet
+  - this is not acceptance-ready for "KB gap -> internet fallback" until the Ark account-level Web Search plugin is enabled and the same smoke returns without the retry header
