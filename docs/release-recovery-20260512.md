@@ -223,6 +223,12 @@
   - Passed during final release-branch gate, with only the existing Vite large chunk warning
 - `npm run kb:validate`
   - Passed during final release-branch gate: `500 games, 1000 docs, 500 recommendations, 5000 clean sections`
+- `npm test`
+  - Passed after session-intent inheritance fix: `14 files / 93 tests`
+- `npm run build`
+  - Passed after session-intent inheritance fix, with only the existing Vite large chunk warning
+- `npm exec tsc -- -p tsconfig.app.json --noEmit`
+  - Passed after session-intent inheritance fix
 
 ## Preview
 
@@ -244,6 +250,8 @@
   - `https://play-or-not-mkrsd6vz4-trikkagos-projects.vercel.app`
 - New preview after switching the production recommendation / referee path to structured local wiki retrieval:
   - `https://play-or-not-1q5kjsc8u-trikkagos-projects.vercel.app`
+- New preview after session-intent inheritance fix for `换一个`:
+  - `https://play-or-not-1rrkrz4nk-trikkagos-projects.vercel.app`
 - Smoke checks:
   - preview `/api/chat` returns `model: deepseek-v3-2-251201` when explicitly targeted
   - preview `/api/chat` still returns normalized `choices[0].message.content`
@@ -319,6 +327,18 @@
   - `POST /api/stt` with real generated Mandarin audio returns `200`
   - preview STT currently uses `x-stt-fallback: production-proxy` because Preview STT secrets are absent
   - Vercel error logs for the preview deployment show no error entries in the checked window
+  - production was not promoted
+- Latest preview smoke checks on `https://play-or-not-1rrkrz4nk-trikkagos-projects.vercel.app`:
+  - deployment ready state: `READY`
+  - Vercel inspect confirms `target: preview`
+  - frontend serves the freshly built `assets/index-ChdbZxuy.js`
+  - bundled frontend contains the `换一个` session-inheritance marker and no longer relies on pre-randomizing a `类似某游戏` query for the change button
+  - plain `POST /api/chat` with `你好，洛思` returns `200`
+  - response headers confirm `x-llm-model: deepseek-v3-2-251201`
+  - response headers confirm `x-llm-upstream-format: ark_responses`
+  - `POST /api/tts` returns `200`, `audio/mpeg`, `x-tts-provider: doubao_tts`, and `x-tts-voice-id: zh_female_tianmeixiaoyuan_uranus_bigtts`
+  - `POST /api/stt` with real generated Mandarin audio returns `200`
+  - preview STT still uses `x-stt-fallback: production-proxy` because Preview STT secrets are absent
   - production was not promoted
 - Historical blocker observed on an earlier preview:
   - `POST /api/chat` with `stream: false` returned `504 FUNCTION_INVOCATION_TIMEOUT`
