@@ -164,6 +164,52 @@ describe('/api/chat agent-friendly contract', () => {
     await expect(response.text()).resolves.toContain('response.output_text.delta');
   });
 
+  it('passes through sanitized Ark web_search tools for Responses calls', async () => {
+    const upstreamFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://ark.cn-beijing.volces.com/api/v3/responses');
+
+      const body = JSON.parse(String(init?.body || '{}'));
+      expect(body.tools).toEqual([{ type: 'web_search', max_keyword: 5 }]);
+
+      return new Response(JSON.stringify({
+        id: 'resp_tools',
+        object: 'response',
+        model: 'deepseek-v3-2-251201',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: '查到了。' }],
+          },
+        ],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    vi.stubGlobal('fetch', upstreamFetch);
+
+    const response = await chatHandler(new Request('http://localhost/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-v3-2-251201',
+        messages: [{ role: 'user', content: '查一下这个规则' }],
+        tools: [
+          { type: 'web_search', max_keyword: 99 },
+          { type: 'unsupported_tool' },
+        ],
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.choices[0]?.message?.content).toBe('查到了。');
+  });
+
   it('defaults plain text chat to DeepSeek-V3.2 with the DM system prompt', async () => {
     const upstreamFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe('https://ark.cn-beijing.volces.com/api/v3/responses');

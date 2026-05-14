@@ -3,7 +3,7 @@ import { Send, History, User, ChevronLeft, ChevronRight, MessageSquarePlus, Scal
 import type { Game, ChatMessage } from '@/types';
 import GameCard from '@/components/GameCard';
 import MiniGameCard from '@/components/MiniGameCard';
-import { dialogueAgent } from '@/services/ragService';
+import { dialogueAgent, isRefereeRecommendationSwitchRequest } from '@/services/ragService';
 import { isMockMode, setMockMode, saveLLMConfig, initLLMConfig } from '@/services/llmService';
 import { getDmTtsEnabled, hasDmTtsPrimedPlayback, isDmTtsSupported, preloadDmVoices, primeDmTtsPlayback, setDmTtsEnabled, speakAsDm, stopDmTtsPlayback } from '@/services/dmTtsService';
 import { mockGames } from '@/data/mockData';
@@ -331,6 +331,7 @@ export default function ChatPage({
         },
       });
 
+      const shouldAttachGameCard = result.games.length > 0 && (turnMode === 'recommendation' || result.switchMode);
       if (!hasInsertedAssistantMessage) {
         hasInsertedAssistantMessage = true;
         setMessages((prev) => [
@@ -339,7 +340,8 @@ export default function ChatPage({
             ...assistantPlaceholder,
             content: result.answer,
             isStreaming: false,
-            gameCard: turnMode === 'recommendation' && result.games.length > 0 ? result.games[0] : undefined,
+            gameCard: shouldAttachGameCard ? result.games[0] : undefined,
+            isRefereeMessage: result.switchMode ? false : isRefereeMessage,
           },
         ]);
       } else {
@@ -347,8 +349,8 @@ export default function ChatPage({
           ...message,
           content: result.answer,
           isStreaming: false,
-          gameCard: turnMode === 'recommendation' && result.games.length > 0 ? result.games[0] : undefined,
-          isRefereeMessage,
+          gameCard: shouldAttachGameCard ? result.games[0] : undefined,
+          isRefereeMessage: result.switchMode ? false : isRefereeMessage,
         }));
       }
 
@@ -764,6 +766,17 @@ export default function ChatPage({
     if (mode === 'referee' && activeGame) {
       // 用户明确输入了退出指令
       if (textToSend.trim() === '退出裁判模式' || textToSend.trim() === '退出') {
+        exitRefereeMode();
+        return;
+      }
+
+      if (isRefereeRecommendationSwitchRequest(textToSend)) {
+        dialogueAgent.rememberShownGame(activeGame.id);
+        await runDialogueTurn({
+          userVisibleText: textToSend,
+          llmQuery: textToSend,
+          turnMode: 'recommendation',
+        });
         exitRefereeMode();
         return;
       }

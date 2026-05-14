@@ -133,6 +133,10 @@ interface LLMResponseStreamCallbacks {
   onReplyUpdate?: (text: string) => void;
 }
 
+interface LLMApiCallOptions {
+  allowWebSearch?: boolean;
+}
+
 interface PreparedLlmTurn {
   currentUserQuestion: string;
   retrievedRulesContext: string;
@@ -144,6 +148,7 @@ interface PreparedLlmTurn {
   recommendationSessionContext?: string;
   messages: { role: string; content: string }[];
   directAnswer?: string;
+  allowWebSearch?: boolean;
 }
 
 const RECOMMENDATION_INTERNAL_LABEL_PATTERN = /(推荐摘要|适合场景|结构化词条|推荐检索语料|推荐词条|人数词条|时长词条|难度词条|场景词条|互动词条|机制词条|氛围词条|检索别名|如果用户想找|用户可能会这样描述它)/;
@@ -2049,7 +2054,7 @@ function getSystemInstruction({
       ? `
       【内部规则资料】：
       这些资料只用于你自己判断，不要把 [证据1]、章节名、FAQ 标题、参考依据之类的内部结构露给用户。
-      如果当前资料没有直接写明，就明确说“这条我不敢瞎判”，不要装作规则原文已经写了。
+      如果当前资料没有直接写明，先使用可用的联网搜索工具核对公开规则、官方 FAQ、BGA 帮助或规则书资料；仍找不到可靠依据时，再明确说“这条我不敢瞎判”。
       `
       : '';
 
@@ -2075,10 +2080,11 @@ function getSystemInstruction({
     1. 当本地规则库完整时，你按 **强规则权威** 回答；当本地规则库不完整时，你按 **谨慎助理** 回答。
     2. 当用户询问规则、争议、流程时，优先检索【核心技能库】。
     3. ** 请直接回答问题 **，先给结论，再把关键规则自然解释出来。不要说“根据规则...”“参考依据...”。
-    4. 遇到资料未提及的细节，不要假装规则里明确写了；可以给出谨慎推断，但要说清楚是推断。
+    4. 遇到资料未提及的细节，不要假装规则里明确写了；如果可用，请先联网搜索补证据，优先使用官方规则、发行方 FAQ、BGA 帮助、BGG/规则书等可靠来源。
     5. 解释规则要通俗易懂，像朋友交流一样自然，不要像在念规则说明卡。
     6. 不要把知识库字段名、标题名、问答标签原样吐给用户。禁止出现“目标：目标：”“FAQ：”“常见问题：”这种字段感很重的说法。
     7. 如果本地资料里已经有答案，就请你把它消化成一段完整结论，而不是把资料原句整块搬出来。
+    8. 如果你使用了联网搜索，不要把一堆链接甩给用户；请把查到的信息消化成完整、可执行的判定或玩法解释。只有仍不确定时才提醒用户核对实体规则书。
       
       【回复格式要求】：
       - 必须使用 ** Markdown ** 格式。
@@ -2111,7 +2117,17 @@ function buildCitationReferenceBlock(
 }
 
 // 调用真实LLM API
-async function callLLMAPI(messages: { role: string; content: string }[], mode: ChatMode): Promise<string> {
+function buildLlmTools(options: LLMApiCallOptions) {
+  return options.allowWebSearch
+    ? [{ type: 'web_search', max_keyword: 3 }]
+    : undefined;
+}
+
+async function callLLMAPI(
+  messages: { role: string; content: string }[],
+  mode: ChatMode,
+  options: LLMApiCallOptions = {},
+): Promise<string> {
   if (!currentConfig) {
     throw new Error('LLM未配置');
   }
@@ -2123,6 +2139,7 @@ async function callLLMAPI(messages: { role: string; content: string }[], mode: C
 
     // 对于支持 JSON mode 的模型（如 OpenAI），可以在这里添加 response_format: { type: "json_object" }
     // 目前通用的做法是在 prompt 里强调返回 JSON
+    const tools = buildLlmTools(options);
     const body = {
       model,
       messages,
@@ -2132,6 +2149,7 @@ async function callLLMAPI(messages: { role: string; content: string }[], mode: C
       // The proxy will use its own secure API key
       providerBaseUrl: currentConfig.baseUrl,
       userApiKey: currentConfig.apiKey?.trim() ? currentConfig.apiKey : undefined,
+      ...(tools ? { tools } : {}),
     };
 
     const response = await fetch(`/api/chat`, {
@@ -2358,6 +2376,7 @@ async function callLLMAPIStream(
   messages: { role: string; content: string }[],
   mode: ChatMode,
   callbacks: LLMResponseStreamCallbacks = {},
+  options: LLMApiCallOptions = {},
 ): Promise<string> {
   if (!currentConfig) {
     throw new Error('LLM未配置');
@@ -2365,6 +2384,7 @@ async function callLLMAPIStream(
 
   const temperature = mode === 'recommendation' ? 0.7 : 0.2;
   const model = resolveModelForMode(mode);
+  const tools = buildLlmTools(options);
   const body = {
     model,
     messages,
@@ -2373,6 +2393,7 @@ async function callLLMAPIStream(
     stream: true,
     providerBaseUrl: currentConfig.baseUrl,
     userApiKey: currentConfig.apiKey?.trim() ? currentConfig.apiKey : undefined,
+    ...(tools ? { tools } : {}),
   };
 
   const response = await fetch('/api/chat', {
@@ -2539,6 +2560,7 @@ async function prepareLlmTurn(
   let recommendationIntent: RecommendationIntent = { desiredTags: [], searchTerms: [] };
   let recommendationCandidates: RecommendationCandidate[] = [];
   let recommendationSessionContext = '';
+  let allowWebSearch = false;
   const shouldUseKnowledgeRetrieval = !shouldSkipKnowledgeRetrieval(currentUserQuestion, mode);
   const excludedRecommendationNames = excludeIds
     .map((gameId) => GAME_DATABASE.find((game) => game.id === gameId)?.titleCn)
@@ -2586,6 +2608,7 @@ async function prepareLlmTurn(
     const evidencePack = buildInternalRefereeContext(activeGame, currentUserQuestion);
     retrievedRulesContext = evidencePack.contextText;
     retrievedRuleCitations = evidencePack.citations;
+    allowWebSearch = true;
   } else if (mode === 'recommendation' && shouldUseKnowledgeRetrieval) {
     if (options.recommendationIntent) {
       recommendationIntent = options.recommendationIntent;
@@ -2627,6 +2650,7 @@ async function prepareLlmTurn(
     excludedRecommendationNames,
     recommendationSessionContext,
     messages,
+    allowWebSearch,
   };
 }
 
@@ -2834,7 +2858,9 @@ export async function getLLMResponse(
 
   if (!useMockMode && currentConfig) {
     try {
-      responseText = await callLLMAPI(preparedTurn.messages, mode);
+      responseText = await callLLMAPI(preparedTurn.messages, mode, {
+        allowWebSearch: preparedTurn.allowWebSearch,
+      });
     } catch (error) {
       console.error('LLM调用失败，本轮转本地兜底:', error);
       responseText = mockLLMResponse(preparedTurn.currentUserQuestion, mode, activeGame, excludeIds, {
@@ -2875,7 +2901,9 @@ export async function getLLMResponseStream(
 
   if (!useMockMode && currentConfig) {
     try {
-      responseText = await callLLMAPIStream(preparedTurn.messages, mode, callbacks);
+      responseText = await callLLMAPIStream(preparedTurn.messages, mode, callbacks, {
+        allowWebSearch: preparedTurn.allowWebSearch,
+      });
     } catch (error) {
       console.error('LLM流式调用失败，本轮转本地兜底:', error);
       responseText = mockLLMResponse(preparedTurn.currentUserQuestion, mode, activeGame, excludeIds, {

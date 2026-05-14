@@ -108,4 +108,19 @@ describe('DialogueAgent recommendation session memory', () => {
     expect(latestIntent?.desiredTags).not.toContain('纸笔规划');
     expect(latestIntent?.sourceTurns).toEqual(['重新开始，推荐情侣双人桌游']);
   });
+
+  it('routes referee switch requests through the one-card recommendation path', async () => {
+    const agent = new DialogueAgent(false);
+
+    const result = await agent.processInput('算了，你都不知道，那还是换一个游戏吧', 'referee', splendor);
+
+    expect(result.switchMode).toBe(true);
+    expect(result.games).toEqual([avalon]);
+    expect(result.games).toHaveLength(1);
+
+    const latestCall = getGameRecommendationMock.mock.calls.at(-1);
+    expect(latestCall?.[1]).toContain(splendor.id);
+    expect(latestCall?.[3]).toBe('recommendation');
+    expect(latestCall?.[4]).toBeUndefined();
+  });
 });

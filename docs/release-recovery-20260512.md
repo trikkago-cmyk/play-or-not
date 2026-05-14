@@ -99,6 +99,12 @@
   - the active state now preserves hard constraints for players, time, complexity, and age unless the user clearly overrides or resets them
   - negative corrections such as `不要纸笔，换成阵营推理` remove stale mechanic signals while keeping still-valid hard constraints
   - `轻松` / `休闲` / `好教` style requests now also feed the structured low-complexity filter instead of remaining copy-only mood words
+- Hardened referee knowledge-gap and mode-switch behavior:
+  - `/api/chat` now supports a sanitized Ark `web_search` tool passthrough for Responses calls
+  - referee mode now exposes that tool to the LLM for non-direct rule questions, so local wiki gaps can be supplemented by web evidence instead of producing a dead-end “不知道”
+  - the referee prompt now tells 洛思 to digest searched rules into a complete answer rather than dumping links or raw references
+  - when a user asks to switch games from referee mode, the turn is rerouted through the normal recommendation pipeline
+  - recommendation results now return exactly one primary game for the chat card path, with no hidden alternative list attached to the same answer
 
 ## Validation
 
@@ -246,6 +252,14 @@
   - `GET /` returned `200`
   - `POST /api/chat` non-stream returned `200`, `x-llm-model: deepseek-v3-2-251201`, `x-llm-upstream-format: ark_responses`
   - `POST /api/chat` with `stream: true` returned `200`, `content-type: text/event-stream`, `x-llm-upstream-format: ark_responses`
+- `npm exec vitest -- --run api/__tests__/chat.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts src/services/__tests__/ragService.test.ts src/services/__tests__/llmService.test.ts`
+  - Passed after referee web-search + one-card switch fix: `4 files / 43 tests`
+- `npm exec tsc -- -p tsconfig.app.json --noEmit`
+  - Passed after referee web-search + one-card switch fix
+- `npm test`
+  - Passed after referee web-search + one-card switch fix: `15 files / 100 tests`
+- `npm run build`
+  - Passed after referee web-search + one-card switch fix, with only the existing Vite large chunk warning
 
 ## Preview
 

@@ -32,6 +32,11 @@ type ResponseInputPart = {
     [key: string]: unknown;
 };
 
+type ArkResponseTool = {
+    type: 'web_search';
+    max_keyword?: number;
+};
+
 const DEFAULT_DM_SYSTEM_PROMPT = [
     '你叫“DM 洛思”，是一个热情、直率、懂气氛的桌游 DM。',
     '始终使用简体中文，像一个懂桌游、会带场子的朋友一样说话。',
@@ -246,6 +251,31 @@ function shouldUseResponsesApi(baseUrl: string, model: string, input: unknown): 
     return isArkBaseUrl(baseUrl) && ARK_RESPONSES_MODELS.has(model);
 }
 
+function normalizeArkResponseTools(tools: unknown): ArkResponseTool[] | undefined {
+    if (!Array.isArray(tools)) {
+        return undefined;
+    }
+
+    const normalizedTools = tools
+        .map((tool): ArkResponseTool | null => {
+            if (!isPlainObject(tool) || tool.type !== 'web_search') {
+                return null;
+            }
+
+            const requestedMaxKeyword = typeof tool.max_keyword === 'number'
+                ? Math.trunc(tool.max_keyword)
+                : 3;
+
+            return {
+                type: 'web_search',
+                max_keyword: Math.min(5, Math.max(1, requestedMaxKeyword)),
+            };
+        })
+        .filter((tool): tool is ArkResponseTool => Boolean(tool));
+
+    return normalizedTools.length > 0 ? normalizedTools : undefined;
+}
+
 function extractAssistantTextFromResponses(payload: any): string {
     const textParts: string[] = [];
 
@@ -351,7 +381,7 @@ export default async function handler(req: Request) {
             );
         }
 
-        const { model, messages, input, max_tokens, temperature, providerBaseUrl, userApiKey, task, stream } = body;
+        const { model, messages, input, max_tokens, temperature, providerBaseUrl, userApiKey, task, stream, tools } = body;
         const hasMessages = Array.isArray(messages) && messages.length > 0;
         const hasInput = typeof input !== 'undefined';
 
@@ -402,6 +432,7 @@ export default async function handler(req: Request) {
         const responseInput = hasInput
             ? input
             : buildResponsesInputFromMessages(upstreamMessages);
+        const responseTools = normalizeArkResponseTools(tools);
 
         if (useResponsesApi && Array.isArray(responseInput) && responseInput.length === 0) {
             return validationError(
@@ -433,6 +464,7 @@ export default async function handler(req: Request) {
                             max_output_tokens: max_tokens || DEFAULT_MAX_TOKENS,
                             temperature: resolvedTemperature,
                             stream: shouldStream,
+                            ...(responseTools ? { tools: responseTools } : {}),
                         }
                         : {
                             model: requestedModel,

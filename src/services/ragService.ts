@@ -2,7 +2,6 @@ import { GAME_DATABASE } from '@/data/gameDatabase';
 import {
   getGameRecommendation,
   getGameRecommendationStream,
-  getSimilarGames,
   parseRecommendationIntent,
   type RecommendationIntent,
 } from './llmService';
@@ -51,6 +50,7 @@ const CHINESE_PLAYER_COUNT_MAP: Record<string, number> = {
 const RESET_RECOMMENDATION_CONTEXT_PATTERN = /(重新开始|从头来|从头开始|别管刚才|不按刚才|忘掉刚才|清空刚才|新的需求|全新推荐|换个场景|另一个场景|重新推荐)/;
 const CONTINUE_RECOMMENDATION_PATTERN = /(换一个|再推荐|再来一个|还有别的吗|还有别的|下一个|类似的|同样的|不要这个|不喜欢这个)/;
 const OVERRIDE_RECOMMENDATION_PATTERN = /(改成|改为|换成|换为|变成|这次|现在|这回|那就|不要|不用|别|不想|去掉|排除)/;
+const REFEREE_TO_RECOMMENDATION_PATTERN = /(换(一个|个|别的|另一?个)?游戏|换一个吧|换个吧|不玩这个了?|不玩了|回到推荐|切回推荐|推荐别的|推荐一个别的|还有别的(?:游戏)?吗|下一个游戏)/;
 const NEGATIVE_RECOMMENDATION_GROUPS = [
   {
     pattern: /(不要|不用|别|不想|去掉|排除)[^，。；,.、]{0,10}(纸笔|写写画画|图图写写|画画|绘图|填表|填色)/,
@@ -104,6 +104,10 @@ function createEmptyDialogueContext(): DialogueContext {
     lastQuery: '',
     history: [],
   };
+}
+
+export function isRefereeRecommendationSwitchRequest(input: string): boolean {
+  return REFEREE_TO_RECOMMENDATION_PATTERN.test(input.trim());
 }
 
 function hasRecommendationIntentSignal(intent: RecommendationIntent): boolean {
@@ -407,6 +411,12 @@ export class DialogueAgent {
     // this.useLLM = _use;
   }
 
+  rememberShownGame(gameId: string): void {
+    if (!this.sessionGames.includes(gameId)) {
+      this.sessionGames.push(gameId);
+    }
+  }
+
   private mergeInputSignalsIntoContext(input: string, mode: ChatMode): void {
     const nextPlayerCount = inferPlayerCountFromText(input);
     if (typeof nextPlayerCount === 'number') {
@@ -444,7 +454,13 @@ export class DialogueAgent {
 
   // 处理用户输入
   async processInput(input: string, mode: ChatMode = 'recommendation', activeGame?: Game): Promise<RetrievalResult> {
-    this.mergeInputSignalsIntoContext(input, mode);
+    const shouldSwitchToRecommendation = mode === 'referee' && isRefereeRecommendationSwitchRequest(input);
+    const effectiveMode: ChatMode = shouldSwitchToRecommendation ? 'recommendation' : mode;
+    if (shouldSwitchToRecommendation && activeGame) {
+      this.rememberShownGame(activeGame.id);
+    }
+
+    this.mergeInputSignalsIntoContext(input, effectiveMode);
 
     // 更新上下文
     this.context.lastQuery = input;
@@ -464,7 +480,7 @@ export class DialogueAgent {
     let finalQueryForLLM = input;
 
     // 如果是推荐模式并且有长期累积资产，在输入前悄悄附加上下文
-    if (mode === 'recommendation' && persistentMemory) {
+    if (effectiveMode === 'recommendation' && persistentMemory) {
       finalQueryForLLM = `${persistentMemory}\n\n[用户的当前提问]:\n${input}`;
     }
 
@@ -472,12 +488,12 @@ export class DialogueAgent {
       finalQueryForLLM,
       this.sessionGames,
       this.context.history.slice(0, -1),
-      mode,
-      activeGame,
+      effectiveMode,
+      effectiveMode === 'referee' ? activeGame : undefined,
       {
-        recommendationIntent: mode === 'recommendation' ? this.context.recommendationState : undefined,
-        recommendationSessionState: mode === 'recommendation' ? cloneRecommendationSessionState(this.context.recommendationState) : undefined,
-        recommendationSessionContext: mode === 'recommendation'
+        recommendationIntent: effectiveMode === 'recommendation' ? this.context.recommendationState : undefined,
+        recommendationSessionState: effectiveMode === 'recommendation' ? cloneRecommendationSessionState(this.context.recommendationState) : undefined,
+        recommendationSessionContext: effectiveMode === 'recommendation'
           ? buildRecommendationStatePrompt(this.context.recommendationState)
           : undefined,
       },
@@ -495,16 +511,11 @@ export class DialogueAgent {
     // 添加AI回复到历史
     this.context.history.push({ role: 'assistant', content: result.text });
 
-    // 获取同类备选（仅在推荐模式下且有推荐结果时）
-    const alternativeGames = (mode === 'recommendation' && result.game)
-      ? getSimilarGames(result.game.id, this.sessionGames).slice(0, 3)
-      : [];
-
     return {
-      games: result.game ? [result.game, ...alternativeGames] : alternativeGames, // 推荐模式下返回主要推荐+备选
+      games: result.game ? [result.game] : [],
       context: '',
       answer: result.text,
-      switchMode: result.switchMode // 传递切换信号
+      switchMode: result.switchMode || shouldSwitchToRecommendation,
     };
   }
 
@@ -514,7 +525,13 @@ export class DialogueAgent {
     activeGame?: Game,
     callbacks: DialogueStreamCallbacks = {},
   ): Promise<RetrievalResult> {
-    this.mergeInputSignalsIntoContext(input, mode);
+    const shouldSwitchToRecommendation = mode === 'referee' && isRefereeRecommendationSwitchRequest(input);
+    const effectiveMode: ChatMode = shouldSwitchToRecommendation ? 'recommendation' : mode;
+    if (shouldSwitchToRecommendation && activeGame) {
+      this.rememberShownGame(activeGame.id);
+    }
+
+    this.mergeInputSignalsIntoContext(input, effectiveMode);
 
     this.context.lastQuery = input;
     this.context.turnCount++;
@@ -527,7 +544,7 @@ export class DialogueAgent {
     const persistentMemory = getPersistentContextForPrompt();
     let finalQueryForLLM = input;
 
-    if (mode === 'recommendation' && persistentMemory) {
+    if (effectiveMode === 'recommendation' && persistentMemory) {
       finalQueryForLLM = `${persistentMemory}\n\n[用户的当前提问]:\n${input}`;
     }
 
@@ -535,15 +552,15 @@ export class DialogueAgent {
       finalQueryForLLM,
       this.sessionGames,
       this.context.history.slice(0, -1),
-      mode,
-      activeGame,
+      effectiveMode,
+      effectiveMode === 'referee' ? activeGame : undefined,
       {
         onReplyUpdate: callbacks.onAnswerUpdate,
       },
       {
-        recommendationIntent: mode === 'recommendation' ? this.context.recommendationState : undefined,
-        recommendationSessionState: mode === 'recommendation' ? cloneRecommendationSessionState(this.context.recommendationState) : undefined,
-        recommendationSessionContext: mode === 'recommendation'
+        recommendationIntent: effectiveMode === 'recommendation' ? this.context.recommendationState : undefined,
+        recommendationSessionState: effectiveMode === 'recommendation' ? cloneRecommendationSessionState(this.context.recommendationState) : undefined,
+        recommendationSessionContext: effectiveMode === 'recommendation'
           ? buildRecommendationStatePrompt(this.context.recommendationState)
           : undefined,
       },
@@ -560,15 +577,11 @@ export class DialogueAgent {
 
     this.context.history.push({ role: 'assistant', content: result.text });
 
-    const alternativeGames = (mode === 'recommendation' && result.game)
-      ? getSimilarGames(result.game.id, this.sessionGames).slice(0, 3)
-      : [];
-
     return {
-      games: result.game ? [result.game, ...alternativeGames] : alternativeGames,
+      games: result.game ? [result.game] : [],
       context: '',
       answer: result.text,
-      switchMode: result.switchMode,
+      switchMode: result.switchMode || shouldSwitchToRecommendation,
     };
   }
 
