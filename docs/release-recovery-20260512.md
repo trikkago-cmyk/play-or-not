@@ -102,6 +102,7 @@
 - Hardened referee knowledge-gap and mode-switch behavior:
   - `/api/chat` now supports a sanitized Ark `web_search` tool passthrough for Responses calls
   - referee mode now exposes that tool to the LLM for non-direct rule questions, so local wiki gaps can be supplemented by web evidence instead of producing a dead-end “不知道”
+  - if the current Volcengine account has not enabled Ark web search, `/api/chat` now automatically retries the same request without the tool and marks the response with `x-llm-web-search: unavailable_tool_retry` instead of dropping the user into a raw upstream 404
   - the referee prompt now tells 洛思 to digest searched rules into a complete answer rather than dumping links or raw references
   - when a user asks to switch games from referee mode, the turn is rerouted through the normal recommendation pipeline
   - recommendation results now return exactly one primary game for the chat card path, with no hidden alternative list attached to the same answer
@@ -260,6 +261,14 @@
   - Passed after referee web-search + one-card switch fix: `15 files / 100 tests`
 - `npm run build`
   - Passed after referee web-search + one-card switch fix, with only the existing Vite large chunk warning
+- `npm exec vitest -- --run api/__tests__/chat.test.ts src/services/__tests__/llmService.refereeEvidence.test.ts src/services/__tests__/ragService.test.ts`
+  - Passed after adding Ark `ToolNotOpen` retry: `3 files / 21 tests`
+- `npm exec tsc -- -p tsconfig.app.json --noEmit`
+  - Passed after adding Ark `ToolNotOpen` retry
+- `npm test`
+  - Passed after adding Ark `ToolNotOpen` retry: `15 files / 101 tests`
+- `npm run build`
+  - Passed after adding Ark `ToolNotOpen` retry, with only the existing Vite large chunk warning
 
 ## Preview
 

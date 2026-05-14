@@ -210,6 +210,66 @@ describe('/api/chat agent-friendly contract', () => {
     expect(payload.choices[0]?.message?.content).toBe('查到了。');
   });
 
+  it('retries without web_search when the Ark account has not activated the tool', async () => {
+    const upstreamFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || '{}'));
+
+      if (body.tools) {
+        return new Response(JSON.stringify({
+          error: {
+            code: 'ToolNotOpen',
+            message: 'Your account has not activated web search.',
+          },
+        }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        id: 'resp_retry',
+        object: 'response',
+        model: 'deepseek-v3-2-251201',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: '先按模型知识回答。' }],
+          },
+        ],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    vi.stubGlobal('fetch', upstreamFetch);
+
+    const response = await chatHandler(new Request('http://localhost/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-v3-2-251201',
+        messages: [{ role: 'user', content: '查一下这个规则' }],
+        tools: [{ type: 'web_search', max_keyword: 3 }],
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-llm-web-search')).toBe('unavailable_tool_retry');
+    expect(upstreamFetch).toHaveBeenCalledTimes(2);
+
+    const firstBody = JSON.parse(String(upstreamFetch.mock.calls[0]?.[1]?.body || '{}'));
+    const secondBody = JSON.parse(String(upstreamFetch.mock.calls[1]?.[1]?.body || '{}'));
+    expect(firstBody.tools).toEqual([{ type: 'web_search', max_keyword: 3 }]);
+    expect(secondBody.tools).toBeUndefined();
+
+    const payload = await response.json();
+    expect(payload.choices[0]?.message?.content).toBe('先按模型知识回答。');
+  });
+
   it('defaults plain text chat to DeepSeek-V3.2 with the DM system prompt', async () => {
     const upstreamFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe('https://ark.cn-beijing.volces.com/api/v3/responses');

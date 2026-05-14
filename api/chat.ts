@@ -331,13 +331,20 @@ function normalizeResponsesPayloadToChatShape(payload: any, model: string) {
     };
 }
 
-function passThroughStreamResponse(upstreamResponse: Response, upstreamFormat: 'ark_responses' | 'chat_completions') {
+function passThroughStreamResponse(
+    upstreamResponse: Response,
+    upstreamFormat: 'ark_responses' | 'chat_completions',
+    extraHeaders: Record<string, string> = {},
+) {
     const headers = new Headers(upstreamResponse.headers);
     if (!headers.has('Content-Type')) {
         headers.set('Content-Type', 'text/event-stream; charset=utf-8');
     }
     headers.set('Cache-Control', 'no-store');
     headers.set('x-llm-upstream-format', upstreamFormat);
+    for (const [key, value] of Object.entries(extraHeaders)) {
+        headers.set(key, value);
+    }
 
     return new Response(upstreamResponse.body, {
         status: upstreamResponse.status,
@@ -446,6 +453,25 @@ export default async function handler(req: Request) {
         const upstreamController = new AbortController();
         const upstreamTimeout = setTimeout(() => upstreamController.abort(), UPSTREAM_TIMEOUT_MS);
         let response: Response;
+        let retriedWithoutTools = false;
+        const buildUpstreamPayload = (includeTools: boolean) => (
+            useResponsesApi
+                ? {
+                    model: requestedModel,
+                    input: responseInput,
+                    max_output_tokens: max_tokens || DEFAULT_MAX_TOKENS,
+                    temperature: resolvedTemperature,
+                    stream: shouldStream,
+                    ...(includeTools && responseTools ? { tools: responseTools } : {}),
+                }
+                : {
+                    model: requestedModel,
+                    messages: upstreamMessages,
+                    max_tokens: max_tokens || DEFAULT_MAX_TOKENS,
+                    temperature: resolvedTemperature,
+                    stream: shouldStream,
+                }
+        );
 
         try {
             response = await fetch(`${baseUrl}${useResponsesApi ? '/responses' : '/chat/completions'}`, {
@@ -456,24 +482,7 @@ export default async function handler(req: Request) {
                     ...(shouldStream ? { Accept: 'text/event-stream' } : {}),
                 },
                 signal: upstreamController.signal,
-                body: JSON.stringify(
-                    useResponsesApi
-                        ? {
-                            model: requestedModel,
-                            input: responseInput,
-                            max_output_tokens: max_tokens || DEFAULT_MAX_TOKENS,
-                            temperature: resolvedTemperature,
-                            stream: shouldStream,
-                            ...(responseTools ? { tools: responseTools } : {}),
-                        }
-                        : {
-                            model: requestedModel,
-                            messages: upstreamMessages,
-                            max_tokens: max_tokens || DEFAULT_MAX_TOKENS,
-                            temperature: resolvedTemperature,
-                            stream: shouldStream,
-                        },
-                ),
+                body: JSON.stringify(buildUpstreamPayload(true)),
             });
         } catch (error: any) {
             if (error?.name === 'AbortError') {
@@ -500,27 +509,53 @@ export default async function handler(req: Request) {
         }
 
         if (!response.ok) {
-            const errorText = await response.text();
-            return jsonResponse({
-                error: errorText,
-                code: 'upstream_error',
-                provider_base_url: baseUrl,
-                model: requestedModel,
-                upstream_format: useResponsesApi ? 'ark_responses' : 'chat_completions',
-                hint: 'Check the upstream model name, credentials, and request shape. GET /api/chat for the local contract.',
-            }, {
-                status: response.status,
-                headers: {
-                    'x-llm-model': requestedModel,
-                    'x-llm-upstream-format': useResponsesApi ? 'ark_responses' : 'chat_completions',
-                },
-            });
+            let errorText = await response.text();
+            if (
+                useResponsesApi
+                && responseTools
+                && /ToolNotOpen|web search|content_plugin/i.test(errorText)
+            ) {
+                retriedWithoutTools = true;
+                response = await fetch(`${baseUrl}/responses`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json',
+                        ...(shouldStream ? { Accept: 'text/event-stream' } : {}),
+                    },
+                    body: JSON.stringify(buildUpstreamPayload(false)),
+                });
+
+                if (!response.ok) {
+                    errorText = await response.text();
+                }
+            }
+
+            if (response.ok) {
+                // Continue into the normal success handling below.
+            } else {
+                return jsonResponse({
+                    error: errorText,
+                    code: 'upstream_error',
+                    provider_base_url: baseUrl,
+                    model: requestedModel,
+                    upstream_format: useResponsesApi ? 'ark_responses' : 'chat_completions',
+                    hint: 'Check the upstream model name, credentials, and request shape. GET /api/chat for the local contract.',
+                }, {
+                    status: response.status,
+                    headers: {
+                        'x-llm-model': requestedModel,
+                        'x-llm-upstream-format': useResponsesApi ? 'ark_responses' : 'chat_completions',
+                    },
+                });
+            }
         }
 
         if (shouldStream) {
             return passThroughStreamResponse(
                 response,
                 useResponsesApi ? 'ark_responses' : 'chat_completions',
+                retriedWithoutTools ? { 'x-llm-web-search': 'unavailable_tool_retry' } : {},
             );
         }
 
@@ -532,6 +567,7 @@ export default async function handler(req: Request) {
                 headers: {
                     'x-llm-model': requestedModel,
                     'x-llm-upstream-format': 'ark_responses',
+                    ...(retriedWithoutTools ? { 'x-llm-web-search': 'unavailable_tool_retry' } : {}),
                 },
             });
         }
