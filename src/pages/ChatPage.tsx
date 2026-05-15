@@ -34,6 +34,7 @@ interface ChatPageProps {
 }
 
 const INITIAL_MESSAGE = '嘿！我是你的桌游DM。\n今天几个人？想玩点什么感觉的？';
+const STREAMED_TTS_PREFETCH_WINDOW = 3;
 
 type StreamedSpeechQueueItem = {
   id: string;
@@ -467,6 +468,21 @@ export default function ChatPage({
     return item.preparePromise;
   };
 
+  const prefetchQueuedSpeechItems = (messageId: string, generation: number) => {
+    const state = streamedSpeechQueueRef.current;
+    if (!ttsEnabled || !ttsSupported || state.generation !== generation || state.messageId !== messageId) {
+      return;
+    }
+
+    const queuedItems = state.items
+      .filter((item) => item.status === 'queued' || item.status === 'preparing')
+      .slice(0, STREAMED_TTS_PREFETCH_WINDOW);
+
+    for (const item of queuedItems) {
+      void ensurePreparedSpeechItem(item, generation);
+    }
+  };
+
   const pumpStreamedSpeechQueue = async (messageId: string) => {
     const state = streamedSpeechQueueRef.current;
     if (!ttsEnabled || !ttsSupported || state.processing || state.messageId !== messageId) {
@@ -481,6 +497,7 @@ export default function ChatPage({
 
     const generation = state.generation;
     state.processing = true;
+    prefetchQueuedSpeechItems(messageId, generation);
 
     try {
       const preparedPlayback = await ensurePreparedSpeechItem(nextItem, generation);
@@ -517,6 +534,7 @@ export default function ChatPage({
     }
 
     markStreamedSpeechSettled(messageId);
+    prefetchQueuedSpeechItems(messageId, generation);
     void pumpStreamedSpeechQueue(messageId);
   };
 
@@ -565,6 +583,7 @@ export default function ChatPage({
 
     state.streamHandled = true;
     speakingAssistantMessageIdsRef.current.add(messageId);
+    prefetchQueuedSpeechItems(messageId, state.generation);
     void pumpStreamedSpeechQueue(messageId);
     return true;
   };
