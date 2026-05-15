@@ -421,9 +421,7 @@ export default async function handler(req: Request) {
                 ? 0.7
                 : 0.2;
 
-        // Read secure credentials from Vercel Environment Variables
-        // Fallback to the provided key ONLY IF env is not set (for seamless migration)
-        const apiKey = userApiKey || process.env.LLM_API_KEY || '8fdd5782-0a66-40b7-9a0d-88b755c4a5bc';
+        const apiKey = userApiKey || process.env.LLM_API_KEY;
         const baseUrl = providerBaseUrl || process.env.LLM_BASE_URL || ARK_BASE_URL;
         const requestedModel = model
             || process.env.LLM_MODEL
@@ -432,6 +430,17 @@ export default async function handler(req: Request) {
                 : DEFAULT_ARK_CHAT_MODEL);
         const shouldStream = stream === true;
         const useResponsesApi = shouldUseResponsesApi(baseUrl, requestedModel, input);
+
+        if (!apiKey) {
+            return validationError(
+                CHAT_DOC,
+                'missing_llm_api_key',
+                'LLM provider credentials are not configured.',
+                'Set LLM_API_KEY in the server environment, or pass userApiKey explicitly for this request.',
+                undefined,
+                503,
+            );
+        }
 
         const upstreamMessages = hasMessages
             ? withDefaultDmSystemPrompt(messages as ChatMessage[])

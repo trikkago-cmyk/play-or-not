@@ -1,9 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import chatHandler from '../chat';
 
 describe('/api/chat agent-friendly contract', () => {
+  beforeEach(() => {
+    vi.stubEnv('LLM_API_KEY', 'test-llm-api-key');
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it('returns machine-readable endpoint documentation on GET', async () => {
@@ -56,6 +61,26 @@ describe('/api/chat agent-friendly contract', () => {
     const payload = await response.json();
     expect(payload.code).toBe('invalid_task');
     expect(payload.capabilities_url).toBe('/capabilities.json');
+  });
+
+  it('fails closed when no LLM API key is configured', async () => {
+    vi.stubEnv('LLM_API_KEY', '');
+
+    const response = await chatHandler(new Request('http://localhost/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: '你好，洛思' }],
+      }),
+    }));
+
+    expect(response.status).toBe(503);
+
+    const payload = await response.json();
+    expect(payload.code).toBe('missing_llm_api_key');
+    expect(payload.hint).toContain('LLM_API_KEY');
   });
 
   it('maps Ark Responses API payloads back into chat-completions shape', async () => {
