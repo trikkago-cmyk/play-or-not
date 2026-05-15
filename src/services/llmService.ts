@@ -153,7 +153,6 @@ interface PreparedLlmTurn {
 
 const RECOMMENDATION_INTERNAL_LABEL_PATTERN = /(推荐摘要|适合场景|结构化词条|推荐检索语料|推荐词条|人数词条|时长词条|难度词条|场景词条|互动词条|机制词条|氛围词条|检索别名|如果用户想找|用户可能会这样描述它)/;
 const GENERIC_RECOMMENDATION_HEADING_PATTERN = /(这局为什么会中它|为什么适合你们这局|为什么选中它|为什么选它|最抓人的点|再补一个爽点|爽点是什么|推荐理由|核心亮点|好玩点|更容易上头的地方)/;
-const AWKWARD_RECOMMENDATION_COPY_PATTERN = /(决策有后劲|越玩越有[账帐]|决策很有味道|每一步都真有味道|后劲很足|回来找你算[账帐]|舒服区间|甜点区|甜蜜点|sweet\s*spot|不掉线|开爽)/i;
 
 function sanitizeRecommendationEvidenceText(text: string): string {
   if (!text) {
@@ -181,10 +180,11 @@ function sanitizeRecommendationEvidenceText(text: string): string {
 }
 
 function sanitizeRecommendationReplyText(text: string): string {
-  return normalizeKnownGameTitleVariants(text)
+  const cleanedText = normalizeKnownGameTitleVariants(text)
     .replace(/按你刚才这句，我先回到当前召回里最稳的一款[:：]?/g, '按你这局的需求，我先给你落一款更贴的：')
     .replace(/我直接给你推荐召回中最稳的这一句[:：]?/g, '这局我先给你落这款：')
     .replace(/当前召回里最稳的一款[:：]?/g, '这局更贴的一款：')
+    .replace(/它最抓人的地方是[:：]\s*/g, '')
     .replace(/决策有后劲/g, '每步都有取舍')
     .replace(/越玩越有[账帐]/g, '长线规划更过瘾')
     .replace(/决策很有味道/g, '每一步都要想一想')
@@ -204,6 +204,28 @@ function sanitizeRecommendationReplyText(text: string): string {
     .replace(/内部识别码[:：]?\s*[a-z0-9-]+/gi, '')
     .replace(/推荐候选池|候选池|召回|recommendation_id|memoryContext|Core Memory|长期记忆|内部使用/g, '')
     .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return stripGenericRecommendationHeadingLines(cleanedText);
+}
+
+function stripGenericRecommendationHeadingLines(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => line.replace(
+      /^(\s*[-*]\s*)\*\*(这局为什么会中它|为什么适合你们这局|为什么选中它|为什么选它|最抓人的点|再补一个爽点|爽点是什么|推荐理由|核心亮点|好玩点|更容易上头的地方)\*\*[:：]?\s*/,
+      '$1',
+    ))
+    .filter((line) => {
+      const normalizedLine = line
+        .replace(/^\s*(?:#+|[-*])\s*/, '')
+        .replace(/\*\*/g, '')
+        .replace(/[:：]\s*$/, '')
+        .trim();
+      return !GENERIC_RECOMMENDATION_HEADING_PATTERN.test(normalizedLine);
+    })
+    .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -1854,23 +1876,6 @@ function shouldForceLocalRecommendationRewrite(text: string): boolean {
     return false;
   }
 
-  const bulletCount = (text.match(/(?:^|\n)-\s+\*\*/g) ?? []).length;
-  if (bulletCount === 0 || (bulletCount > 0 && bulletCount < 2)) {
-    return true;
-  }
-
-  if (/它最抓人的地方是[:：]/.test(compact) && bulletCount < 2) {
-    return true;
-  }
-
-  if (GENERIC_RECOMMENDATION_HEADING_PATTERN.test(compact)) {
-    return true;
-  }
-
-  if (AWKWARD_RECOMMENDATION_COPY_PATTERN.test(compact)) {
-    return true;
-  }
-
   if (/(?:\[|【)(?:推荐摘要|适合场景|结构化词条|推荐检索语料|推荐词条)(?:\]|】)/.test(compact)) {
     return true;
   }
@@ -2792,7 +2797,7 @@ function finalizeLlmResponse(
       if (
         finalGame
         && !parsedResult.unknown_target_game
-        && (shouldForceLocalRecommendationRewrite(rawReplyText) || shouldForceLocalRecommendationRewrite(text))
+        && shouldForceLocalRecommendationRewrite(text)
       ) {
         const rewriteCandidate = recommendationCandidates.find((candidate) => candidate.game.id === finalGame.id) ?? {
           game: finalGame,

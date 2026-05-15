@@ -1027,4 +1027,151 @@ describe('llmService Recommendation Consistency', () => {
         expect(result.text).toContain(`《${result.game!.titleCn}》`);
         expect(result.text).toContain('- **');
     });
+
+    it('should preserve a valid streamed recommendation instead of replacing it with the local fallback template', async () => {
+        const previewUpdates: string[] = [];
+        const encoder = new TextEncoder();
+        const completedReply = '这局我会先推 **《爆炸猫》**。\n\n- **互相埋雷**：抽牌像拆盲盒，大家一边嘴硬一边怕摸到那只猫，气氛很快就能热起来。\n\n如果你们想要的是轻松、好笑、还能互相坑一下，它比规规矩矩讲策略更适合。';
+        const streamedJsonPrefix = `{"reply":"${completedReply.replace(/\n/g, '\\n').replace(/"/g, '\\"')}`;
+        const completedJson = JSON.stringify({
+            reply: completedReply,
+            recommendation_name: '爆炸猫',
+            recommendation_id: 'exploding-kittens',
+        });
+        const completedPayload = JSON.stringify({
+            output: [
+                {
+                    type: 'message',
+                    role: 'assistant',
+                    content: [
+                        {
+                            type: 'output_text',
+                            text: completedJson,
+                        },
+                    ],
+                },
+            ],
+        });
+        const sseFrames = [
+            `event: response.output_text.delta\ndata: ${JSON.stringify({ delta: streamedJsonPrefix })}\n\n`,
+            `event: response.completed\ndata: ${completedPayload}\n\n`,
+            'data: [DONE]\n\n',
+        ];
+
+        (globalThis.fetch as any).mockImplementation(async (input: RequestInfo | URL) => {
+            const url = String(input);
+
+            if (url.includes('/api/rag')) {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        hits: [
+                            {
+                                chunk_id: 'exploding-kittens:recommendation:1',
+                                document_id: 'exploding-kittens',
+                                title: '爆炸猫',
+                                text: '轻松聚会卡牌，适合 2 到 5 人，核心体验是抽牌、埋雷、互相坑。',
+                                section_title: '推荐词条',
+                                distance: 0.08,
+                                score: 0.92,
+                                metadata: { game_id: 'exploding-kittens' },
+                            },
+                        ],
+                    }),
+                } as Response;
+            }
+
+            if (url.includes('/api/chat')) {
+                const stream = new ReadableStream({
+                    start(controller) {
+                        for (const frame of sseFrames) {
+                            controller.enqueue(encoder.encode(frame));
+                        }
+                        controller.close();
+                    },
+                });
+
+                return new Response(stream, {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'text/event-stream; charset=utf-8',
+                    },
+                });
+            }
+
+            throw new Error(`Unexpected fetch URL: ${url}`);
+        });
+
+        const result = await getGameRecommendationStream(
+            '4个人轻松聚会，想要互相捉弄一点',
+            [],
+            [],
+            'recommendation',
+            undefined,
+            {
+                onReplyUpdate: (text) => {
+                    previewUpdates.push(text);
+                },
+            },
+        );
+
+        expect(previewUpdates.at(-1)).toContain('互相埋雷');
+        expect(result.game?.id).toBe('exploding-kittens');
+        expect(result.text).toContain('互相埋雷');
+        expect(result.text).toContain('抽牌像拆盲盒');
+        expect(result.text).not.toContain('4人正合适');
+        expect(result.text).not.toContain('新手不掉队');
+        expect(result.text).not.toContain('越玩越有画面');
+    });
+
+    it('should clean generic recommendation headings in place without discarding the model copy', async () => {
+        const modelReply = '这局我会先推 **《爆炸猫》**。\n\n- **推荐理由**：抽牌像拆盲盒，互相埋雷很上头。\n\n它很适合想轻松笑一局的人。';
+
+        (globalThis.fetch as any).mockImplementation(async (input: RequestInfo | URL) => {
+            const url = String(input);
+
+            if (url.includes('/api/rag')) {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        hits: [
+                            {
+                                chunk_id: 'exploding-kittens:recommendation:1',
+                                document_id: 'exploding-kittens',
+                                title: '爆炸猫',
+                                text: '轻松聚会卡牌，适合 2 到 5 人，核心体验是抽牌、埋雷、互相坑。',
+                                section_title: '推荐词条',
+                                distance: 0.08,
+                                score: 0.92,
+                                metadata: { game_id: 'exploding-kittens' },
+                            },
+                        ],
+                    }),
+                } as Response;
+            }
+
+            if (url.includes('/api/chat')) {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        choices: [{ message: { content: JSON.stringify({
+                            reply: modelReply,
+                            recommendation_name: '爆炸猫',
+                            recommendation_id: 'exploding-kittens',
+                        }) } }],
+                    }),
+                } as Response;
+            }
+
+            throw new Error(`Unexpected fetch URL: ${url}`);
+        });
+
+        const result = await getGameRecommendation('4个人轻松聚会，想要互相捉弄一点');
+
+        expect(result.game?.id).toBe('exploding-kittens');
+        expect(result.text).toContain('抽牌像拆盲盒');
+        expect(result.text).toContain('互相埋雷');
+        expect(result.text).not.toContain('推荐理由');
+        expect(result.text).not.toContain('4人正合适');
+    });
 });
