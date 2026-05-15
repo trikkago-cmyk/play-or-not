@@ -1171,6 +1171,10 @@ function buildLocalHit(
       source_refs_json: section.source_refs_json,
       source_refs: parseSourceRefs(section),
       search_text: section.search_text || '',
+      wiki_provenance_version: section.wiki_provenance_version,
+      confidence_method: section.confidence_method,
+      confidence_basis_text: section.confidence_basis_text,
+      review_queue_reason: section.review_queue_reason,
       ...overrides.metadata,
     },
   };

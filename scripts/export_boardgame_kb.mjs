@@ -14,6 +14,9 @@ const RECOMMENDATION_OUTPUT_FILE = path.join(OUTPUT_DIR, 'boardgame_recommendati
 const SOURCE_CANDIDATES_FILE = path.join(OUTPUT_DIR, 'boardgame_source_candidates.raw.jsonl');
 const INTERNAL_WIKI_COMPILE_VERSION = '2026-05-09.v1';
 const KNOWLEDGE_VERIFIED_AT = '2026-05-15';
+const WIKI_PROVENANCE_VERSION = '2026-05-15.wiki-provenance-v1';
+const WIKI_CONFIDENCE_METHOD = 'wiki_source_coverage_heuristic_v1';
+const WIKI_CONFIDENCE_BASIS = '启发式来源覆盖评分：根据 BGA 公开 gamepanel/rules excerpt、BGG 元数据、B 站教程线索与本地整理完整度估算；不是逐条 claim 级事实校验。';
 
 let sourceCandidatesBySlug = new Map();
 
@@ -171,10 +174,19 @@ function buildKnowledgeProvenance(game, mode, sectionType = '') {
       : hasBgg
         ? 'community_metadata'
         : 'local_curated_summary';
+  const reviewQueueReason = verificationStatus === 'source_backed'
+    ? ''
+    : verificationStatus === 'reviewed'
+      ? '已有结构化来源线索，但尚未完成 claim 级规则逐条复核。'
+      : '主要依赖本地整理或弱来源，需要补充官方规则、平台帮助或人工复核。';
 
   return {
+    wiki_provenance_version: WIKI_PROVENANCE_VERSION,
+    confidence_method: WIKI_CONFIDENCE_METHOD,
+    confidence_basis_text: WIKI_CONFIDENCE_BASIS,
     confidence_score: confidenceScore,
     verification_status: verificationStatus,
+    review_queue_reason: reviewQueueReason,
     verified_at: KNOWLEDGE_VERIFIED_AT,
     source_retrieved_at: sourceRetrievedAt,
     stale_after_days: staleAfterDays,
@@ -732,8 +744,12 @@ function createKnowledgeDocument(game, groupedApprovedPatches) {
       char_count: section.char_count,
       chapter_id: section.chapter_id,
       patch_id: section.patch_id || '',
+      wiki_provenance_version: section.wiki_provenance_version,
+      confidence_method: section.confidence_method,
+      confidence_basis_text: section.confidence_basis_text,
       confidence_score: section.confidence_score,
       verification_status: section.verification_status,
+      review_queue_reason: section.review_queue_reason,
       verified_at: section.verified_at,
       source_retrieved_at: section.source_retrieved_at,
       stale_after_days: section.stale_after_days,
@@ -790,8 +806,12 @@ function createRecommendationDocument(game, groupedApprovedPatches) {
       char_count: section.content.length,
       chapter_id: section.chapter_id,
       patch_id: section.patch_id || '',
+      wiki_provenance_version: section.wiki_provenance_version,
+      confidence_method: section.confidence_method,
+      confidence_basis_text: section.confidence_basis_text,
       confidence_score: section.confidence_score,
       verification_status: section.verification_status,
+      review_queue_reason: section.review_queue_reason,
       verified_at: section.verified_at,
       source_retrieved_at: section.source_retrieved_at,
       stale_after_days: section.stale_after_days,

@@ -97,6 +97,13 @@ def _build_context_header(
     if confidence_score is not None and verification_status:
         lines.append(f"知识置信度：{verification_status} / {confidence_score}")
 
+    confidence_method = _metadata_value(section_metadata, metadata, "confidence_method")
+    review_queue_reason = _metadata_value(section_metadata, metadata, "review_queue_reason")
+    if confidence_method:
+        lines.append(f"置信度方法：{confidence_method}")
+    if review_queue_reason:
+        lines.append(f"复核提示：{review_queue_reason}")
+
     primary_source_type = _metadata_value(section_metadata, metadata, "primary_source_type")
     source_types_text = _format_metadata_list(
         _metadata_value(section_metadata, metadata, "source_types_text"),

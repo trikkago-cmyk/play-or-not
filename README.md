@@ -1,6 +1,6 @@
 # Play or Not
 
-AI-first board game DM for recommendation, live referee Q&A, voice interaction, and knowledge-base RAG.
+AI-first board game DM for recommendation, live referee Q&A, voice interaction, and a structured board-game Wiki.
 
 - Live demo: https://play-or-not-dm.vercel.app/
 - Agent-facing docs: https://play-or-not-dm.vercel.app/llms.txt
@@ -13,7 +13,7 @@ This project is a board game assistant built for real group-play scenarios:
 
 - Recommendation mode: suggest board games by player count, vibe, complexity, duration, and occasion.
 - Referee mode: answer "how does this rule work right now?" follow-up questions during play.
-- RAG pipeline: structured board game knowledge export, ChromaDB indexing, and retrieval evaluation.
+- Structured Wiki pipeline: board-game knowledge export, provenance/confidence metadata, retrieval indexing, and evaluation.
 - Voice interaction: STT input and DM-style TTS playback.
 - Agent-friendly surface: `llms.txt`, `capabilities.json`, `openapi.json`, and `/developers/`.
 
@@ -21,10 +21,11 @@ This project is a board game assistant built for real group-play scenarios:
 
 - Frontend: React 19 + TypeScript + Vite
 - API layer: Vercel serverless routes under [`api/`](/Users/yusijua/Downloads/app%202/api)
-- RAG backend: FastAPI + ChromaDB + FastEmbed in [`rag/`](/Users/yusijua/Downloads/app%202/rag)
+- Optional retrieval sidecar: FastAPI + ChromaDB + FastEmbed in [`rag/`](/Users/yusijua/Downloads/app%202/rag)
 - Evaluation: retrieval eval suites in [`rag_evals/`](/Users/yusijua/Downloads/app%202/rag_evals)
 - TTS adapter: Python proxy for CosyVoice / external TTS in [`tts_service/`](/Users/yusijua/Downloads/app%202/tts_service)
 - Knowledge assets: exported KB and source expansion artifacts in [`knowledge/`](/Users/yusijua/Downloads/app%202/knowledge)
+- Wiki provenance policy: confidence, source, and freshness notes in [`docs/wiki-provenance.md`](/Users/yusijua/Downloads/app%202/docs/wiki-provenance.md)
 
 ## Product Surface
 
@@ -69,7 +70,7 @@ This project is a board game assistant built for real group-play scenarios:
 npm install
 ```
 
-### 2. Create a Python virtualenv for RAG / TTS helpers
+### 2. Create a Python virtualenv for retrieval / TTS helpers
 
 ```bash
 python3 -m venv .venv
@@ -84,7 +85,7 @@ pip install -r requirements-tts.txt
 npm run dev
 ```
 
-### 4. Optional: run the Python RAG service
+### 4. Optional: run the Python retrieval sidecar
 
 ```bash
 source .venv/bin/activate
@@ -133,7 +134,7 @@ export STT_MODEL="whisper-large-v3"
 export STT_LANGUAGE="zh"
 ```
 
-### RAG proxy
+### Retrieval sidecar proxy
 
 ```bash
 export RAG_SERVICE_URL="http://127.0.0.1:8001"
@@ -195,7 +196,7 @@ PYTHONPATH=. ./.venv/bin/python -m rag.ingest --input knowledge/boardgame_recomm
 
 ## Evaluation
 
-Run all RAG evals:
+Run all retrieval evals:
 
 ```bash
 npm run rag:eval
@@ -229,7 +230,7 @@ npm run tts:eval
 ## Deployment Notes
 
 - Frontend and Node routes are configured for Vercel via [`vercel.json`](/Users/yusijua/Downloads/app%202/vercel.json).
-- The Python RAG service and TTS adapter are designed to run as sidecar services.
+- The Python retrieval sidecar and TTS adapter are designed to run as sidecar services.
 - Public discovery and agent-facing files live in [`public/`](/Users/yusijua/Downloads/app%202/public).
 
 ## Collaboration Notes

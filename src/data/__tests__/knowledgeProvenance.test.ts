@@ -20,7 +20,10 @@ describe('boardgame knowledge provenance metadata', () => {
       typeof row.confidence_score !== 'number' ||
       row.confidence_score < 0 ||
       row.confidence_score > 1 ||
+      row.confidence_method !== 'wiki_source_coverage_heuristic_v1' ||
+      !row.confidence_basis_text ||
       !['source_backed', 'reviewed', 'needs_review', 'stale'].includes(row.verification_status) ||
+      (row.verification_status !== 'source_backed' && !row.review_queue_reason) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(row.verified_at) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(row.stale_at) ||
       !Array.isArray(row.source_refs) ||

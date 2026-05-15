@@ -87,7 +87,11 @@ function parseSourceRefs(row) {
 function validateProvenance(row, label, failures) {
   const metadata = row.metadata || {};
   const confidenceScore = row.confidence_score ?? metadata.confidence_score;
+  const wikiProvenanceVersion = row.wiki_provenance_version ?? metadata.wiki_provenance_version;
+  const confidenceMethod = row.confidence_method ?? metadata.confidence_method;
+  const confidenceBasisText = row.confidence_basis_text ?? metadata.confidence_basis_text;
   const verificationStatus = row.verification_status ?? metadata.verification_status;
+  const reviewQueueReason = row.review_queue_reason ?? metadata.review_queue_reason;
   const verifiedAt = row.verified_at ?? metadata.verified_at;
   const sourceRetrievedAt = row.source_retrieved_at ?? metadata.source_retrieved_at;
   const staleAfterDays = row.stale_after_days ?? metadata.stale_after_days;
@@ -103,7 +107,11 @@ function validateProvenance(row, label, failures) {
     `${label} invalid confidence_score: ${confidenceScore}`,
     failures,
   );
+  failIf(!hasValue(wikiProvenanceVersion), `${label} missing wiki_provenance_version`, failures);
+  failIf(!hasValue(confidenceMethod), `${label} missing confidence_method`, failures);
+  failIf(!hasValue(confidenceBasisText), `${label} missing confidence_basis_text`, failures);
   failIf(!ALLOWED_VERIFICATION_STATUSES.has(String(verificationStatus)), `${label} invalid verification_status: ${verificationStatus}`, failures);
+  failIf(String(verificationStatus) !== 'source_backed' && !hasValue(reviewQueueReason), `${label} missing review_queue_reason`, failures);
   failIf(!ISO_DATE_PATTERN.test(String(verifiedAt)), `${label} invalid verified_at: ${verifiedAt}`, failures);
   failIf(!ISO_DATE_PATTERN.test(String(sourceRetrievedAt)), `${label} invalid source_retrieved_at: ${sourceRetrievedAt}`, failures);
   failIf(typeof staleAfterDays !== 'number' || staleAfterDays <= 0, `${label} invalid stale_after_days: ${staleAfterDays}`, failures);
@@ -114,6 +122,11 @@ function validateProvenance(row, label, failures) {
   failIf(!hasValue(sourceTypesText), `${label} missing source_types_text`, failures);
   failIf(sourceRefs.length < 1, `${label} missing source_refs`, failures);
   failIf(sourceRefs.length > 0 && sourceRefs.length !== sourceRefCount, `${label} source_ref_count mismatch`, failures);
+  failIf(
+    String(verificationStatus) === 'source_backed' && !String(sourceTypesText).includes('bga_public_gamepanel'),
+    `${label} source_backed row lacks bga_public_gamepanel evidence`,
+    failures,
+  );
 
   sourceRefs.forEach((sourceRef, index) => {
     const sourceLabel = `${label} source_refs[${index}]`;
