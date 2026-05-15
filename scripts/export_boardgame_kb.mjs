@@ -11,7 +11,11 @@ const OUTPUT_DIR = path.join(PROJECT_ROOT, 'knowledge');
 const DOCUMENT_OUTPUT_FILE = path.join(OUTPUT_DIR, 'boardgame_kb.jsonl');
 const SECTION_OUTPUT_FILE = path.join(OUTPUT_DIR, 'boardgame_kb_sections.jsonl');
 const RECOMMENDATION_OUTPUT_FILE = path.join(OUTPUT_DIR, 'boardgame_recommendation_kb.jsonl');
+const SOURCE_CANDIDATES_FILE = path.join(OUTPUT_DIR, 'boardgame_source_candidates.raw.jsonl');
 const INTERNAL_WIKI_COMPILE_VERSION = '2026-05-09.v1';
+const KNOWLEDGE_VERIFIED_AT = '2026-05-15';
+
+let sourceCandidatesBySlug = new Map();
 
 function getKnowledgeTier(game) {
   return game.knowledgeTier || (compactText(game.knowledgeBase).length > 0 ? 'full' : 'catalog');
@@ -40,6 +44,154 @@ function joinValues(values) {
     .map((value) => compactText(value))
     .filter(Boolean)
     .join(' | ');
+}
+
+function roundConfidence(value) {
+  return Math.round(Math.max(0, Math.min(0.95, value)) * 100) / 100;
+}
+
+function isoDateFromUnixSeconds(value) {
+  if (!Number.isFinite(Number(value))) {
+    return '';
+  }
+
+  return new Date(Number(value) * 1000).toISOString().slice(0, 10);
+}
+
+function addDaysIsoDate(dateValue, days) {
+  const date = new Date(`${dateValue}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function buildBilibiliVideoUrl(bilibiliId) {
+  const id = compactText(bilibiliId);
+  return id ? `https://www.bilibili.com/video/${id}` : '';
+}
+
+function getSourceCandidate(game) {
+  return sourceCandidatesBySlug.get(game.id)
+    || sourceCandidatesBySlug.get(compactText(game.titleEn).toLowerCase().replace(/[^a-z0-9]/g, ''))
+    || null;
+}
+
+function buildSourceRefs(game) {
+  const refs = [];
+  const sourceCandidate = getSourceCandidate(game);
+  const collectedAt = isoDateFromUnixSeconds(sourceCandidate?.collected_at) || KNOWLEDGE_VERIFIED_AT;
+
+  if (sourceCandidate?.source_url) {
+    refs.push({
+      source_type: 'bga_public_gamepanel',
+      title: `Board Game Arena game panel: ${game.titleEn || game.titleCn}`,
+      url: compactText(sourceCandidate.source_url),
+      retrieved_at: collectedAt,
+      confidence: sourceCandidate.rules_excerpt ? 0.82 : 0.76,
+      evidence_scope: sourceCandidate.rules_excerpt ? 'metadata_and_rules_excerpt' : 'metadata',
+    });
+  }
+
+  if (game.bggUrl) {
+    refs.push({
+      source_type: 'bgg_gamepage',
+      title: `BoardGameGeek: ${game.titleEn || game.titleCn}`,
+      url: compactText(game.bggUrl),
+      retrieved_at: collectedAt,
+      confidence: 0.72,
+      evidence_scope: 'metadata_and_community_reference',
+    });
+  }
+
+  const bilibiliUrl = buildBilibiliVideoUrl(game.bilibiliId);
+  if (bilibiliUrl) {
+    refs.push({
+      source_type: 'bilibili_tutorial_video',
+      title: `Bilibili tutorial: ${game.titleCn || game.titleEn}`,
+      url: bilibiliUrl,
+      retrieved_at: collectedAt,
+      confidence: 0.62,
+      evidence_scope: 'tutorial_video',
+    });
+  } else if (game.tutorialVideoUrl) {
+    refs.push({
+      source_type: 'bilibili_search_discovery',
+      title: `Bilibili tutorial search: ${game.titleCn || game.titleEn}`,
+      url: compactText(game.tutorialVideoUrl),
+      retrieved_at: collectedAt,
+      confidence: 0.48,
+      evidence_scope: 'search_discovery_only',
+    });
+  }
+
+  refs.push({
+    source_type: 'local_curated_dataset',
+    title: getSourceFile(game),
+    url: `repo://${getSourceFile(game)}`,
+    retrieved_at: KNOWLEDGE_VERIFIED_AT,
+    confidence: getKnowledgeTier(game) === 'full' ? 0.64 : 0.52,
+    evidence_scope: 'curated_or_generated_summary',
+  });
+
+  return refs;
+}
+
+function buildKnowledgeProvenance(game, mode, sectionType = '') {
+  const refs = buildSourceRefs(game);
+  const sourceCandidate = getSourceCandidate(game);
+  const hasBgaRules = Boolean(sourceCandidate?.rules_excerpt);
+  const hasBga = Boolean(sourceCandidate?.source_url);
+  const hasBgg = Boolean(game.bggUrl);
+  const hasTutorial = Boolean(game.bilibiliId || game.tutorialVideoUrl);
+  const isReferee = mode === 'referee';
+  const isRuleLike = /rules|faq|knowledge_base|tips|wiki_patch/.test(sectionType);
+
+  let confidence = isReferee ? 0.58 : 0.62;
+  if (hasBga) confidence += 0.12;
+  if (hasBgaRules && isReferee && isRuleLike) confidence += 0.12;
+  if (hasBgg) confidence += 0.07;
+  if (hasTutorial) confidence += 0.04;
+  if (getKnowledgeTier(game) === 'full') confidence += 0.03;
+
+  if (sectionType === 'wiki_patch') {
+    confidence = Math.min(confidence, 0.72);
+  }
+
+  const confidenceScore = roundConfidence(confidence);
+  const staleAfterDays = isReferee ? 365 : 180;
+  const sourceRetrievedAt = refs[0]?.retrieved_at || KNOWLEDGE_VERIFIED_AT;
+  const verificationStatus = confidenceScore >= 0.78 && hasBga
+    ? 'source_backed'
+    : confidenceScore >= 0.68
+      ? 'reviewed'
+      : 'needs_review';
+  const canonicality = hasBgaRules && isReferee && isRuleLike
+    ? 'platform_rules_excerpt'
+    : hasBga
+      ? 'structured_platform_metadata'
+      : hasBgg
+        ? 'community_metadata'
+        : 'local_curated_summary';
+
+  return {
+    confidence_score: confidenceScore,
+    verification_status: verificationStatus,
+    verified_at: KNOWLEDGE_VERIFIED_AT,
+    source_retrieved_at: sourceRetrievedAt,
+    stale_after_days: staleAfterDays,
+    stale_at: addDaysIsoDate(KNOWLEDGE_VERIFIED_AT, staleAfterDays),
+    canonicality,
+    primary_source_type: refs[0]?.source_type || 'local_curated_dataset',
+    source_ref_count: refs.length,
+    source_types_text: refs.map((ref) => ref.source_type).join(' | '),
+    source_policy_json: sourceCandidate?.source_policy ? JSON.stringify(sourceCandidate.source_policy) : '',
+    source_refs_json: JSON.stringify(refs),
+    source_refs: refs,
+  };
+}
+
+function scalarProvenance(provenance) {
+  const { source_refs: _sourceRefs, ...scalar } = provenance;
+  return scalar;
 }
 
 function getRecommendationProfile(game) {
@@ -434,47 +586,59 @@ function createSectionDocuments(game, groupedApprovedPatches) {
     .map((question) => compactText(question))
     .filter(Boolean);
 
-  const compiledSections = rawSections.map((section) => ({
-    ...getRefereeWikiMetadata(section.section_id),
-    document_id: `${game.id}:${section.section_id}`,
-    ...baseMetadata,
-    source_file: getSourceFile(game),
-    heading: section.heading,
-    section_id: section.section_id,
-    section_type: section.section_type,
-    wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
-    wiki_mode: 'referee',
-    wiki_visibility: 'internal',
-    content: section.content,
-    char_count: section.content.length,
-    common_questions: commonQuestions,
-    search_text: [
-      game.titleCn,
-      game.titleEn,
-      section.heading,
-      commonQuestions.join('\n'),
-      section.content,
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-  }));
+  const compiledSections = rawSections.map((section) => {
+    const provenance = buildKnowledgeProvenance(game, 'referee', section.section_type);
 
-  const approvedPatchSections = getApprovedPatchSections(groupedApprovedPatches, game.id, 'referee').map((section) => ({
-    ...baseMetadata,
-    source_file: 'src/data/wikiApprovedPatches.ts',
-    char_count: section.content.length,
-    common_questions: commonQuestions,
-    search_text: [
-      game.titleCn,
-      game.titleEn,
-      section.heading,
-      joinValues(section.chapter_keywords),
-      section.content,
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-    ...section,
-  }));
+    return {
+      ...getRefereeWikiMetadata(section.section_id),
+      document_id: `${game.id}:${section.section_id}`,
+      ...baseMetadata,
+      ...scalarProvenance(provenance),
+      source_refs: provenance.source_refs,
+      source_file: getSourceFile(game),
+      heading: section.heading,
+      section_id: section.section_id,
+      section_type: section.section_type,
+      wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
+      wiki_mode: 'referee',
+      wiki_visibility: 'internal',
+      content: section.content,
+      char_count: section.content.length,
+      common_questions: commonQuestions,
+      search_text: [
+        game.titleCn,
+        game.titleEn,
+        section.heading,
+        commonQuestions.join('\n'),
+        section.content,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    };
+  });
+
+  const approvedPatchSections = getApprovedPatchSections(groupedApprovedPatches, game.id, 'referee').map((section) => {
+    const provenance = buildKnowledgeProvenance(game, 'referee', 'wiki_patch');
+
+    return {
+      ...baseMetadata,
+      ...scalarProvenance(provenance),
+      source_refs: provenance.source_refs,
+      source_file: 'src/data/wikiApprovedPatches.ts',
+      char_count: section.content.length,
+      common_questions: commonQuestions,
+      search_text: [
+        game.titleCn,
+        game.titleEn,
+        section.heading,
+        joinValues(section.chapter_keywords),
+        section.content,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      ...section,
+    };
+  });
 
   return [...compiledSections, ...approvedPatchSections];
 }
@@ -501,51 +665,64 @@ function createRecommendationSectionDocuments(game, groupedApprovedPatches) {
     knowledge_tier: getKnowledgeTier(game),
   };
 
-  const compiledSections = createRecommendationSections(game).map((section) => ({
-    ...getRecommendationWikiMetadata(section.section_id),
-    document_id: `recommendation:${game.id}:${section.section_id}`,
-    ...baseMetadata,
-    source_file: getSourceFile(game),
-    heading: section.heading,
-    section_id: section.section_id,
-    section_type: section.section_type,
-    wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
-    wiki_mode: 'recommendation',
-    wiki_visibility: 'internal',
-    content: section.content,
-    char_count: section.content.length,
-    search_text: [
-      game.titleCn,
-      game.titleEn,
-      section.heading,
-      joinValues(profile.allTags),
-      joinValues(profile.searchTerms),
-      section.content,
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-  }));
+  const compiledSections = createRecommendationSections(game).map((section) => {
+    const provenance = buildKnowledgeProvenance(game, 'recommendation', section.section_type);
 
-  const approvedPatchSections = getApprovedPatchSections(groupedApprovedPatches, game.id, 'recommendation').map((section) => ({
-    ...baseMetadata,
-    source_file: 'src/data/wikiApprovedPatches.ts',
-    char_count: section.content.length,
-    search_text: [
-      game.titleCn,
-      game.titleEn,
-      section.heading,
-      joinValues(section.chapter_keywords),
-      section.content,
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-    ...section,
-  }));
+    return {
+      ...getRecommendationWikiMetadata(section.section_id),
+      document_id: `recommendation:${game.id}:${section.section_id}`,
+      ...baseMetadata,
+      ...scalarProvenance(provenance),
+      source_refs: provenance.source_refs,
+      source_file: getSourceFile(game),
+      heading: section.heading,
+      section_id: section.section_id,
+      section_type: section.section_type,
+      wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
+      wiki_mode: 'recommendation',
+      wiki_visibility: 'internal',
+      content: section.content,
+      char_count: section.content.length,
+      search_text: [
+        game.titleCn,
+        game.titleEn,
+        section.heading,
+        joinValues(profile.allTags),
+        joinValues(profile.searchTerms),
+        section.content,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    };
+  });
+
+  const approvedPatchSections = getApprovedPatchSections(groupedApprovedPatches, game.id, 'recommendation').map((section) => {
+    const provenance = buildKnowledgeProvenance(game, 'recommendation', 'wiki_patch');
+
+    return {
+      ...baseMetadata,
+      ...scalarProvenance(provenance),
+      source_refs: provenance.source_refs,
+      source_file: 'src/data/wikiApprovedPatches.ts',
+      char_count: section.content.length,
+      search_text: [
+        game.titleCn,
+        game.titleEn,
+        section.heading,
+        joinValues(section.chapter_keywords),
+        section.content,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      ...section,
+    };
+  });
 
   return [...compiledSections, ...approvedPatchSections];
 }
 
 function createKnowledgeDocument(game, groupedApprovedPatches) {
+  const documentProvenance = buildKnowledgeProvenance(game, 'referee', 'document');
   const sections = createSectionDocuments(game, groupedApprovedPatches).map((section) => ({
     section_id: section.section_id,
     title: section.heading,
@@ -555,6 +732,18 @@ function createKnowledgeDocument(game, groupedApprovedPatches) {
       char_count: section.char_count,
       chapter_id: section.chapter_id,
       patch_id: section.patch_id || '',
+      confidence_score: section.confidence_score,
+      verification_status: section.verification_status,
+      verified_at: section.verified_at,
+      source_retrieved_at: section.source_retrieved_at,
+      stale_after_days: section.stale_after_days,
+      stale_at: section.stale_at,
+      canonicality: section.canonicality,
+      primary_source_type: section.primary_source_type,
+      source_ref_count: section.source_ref_count,
+      source_types_text: section.source_types_text,
+      source_policy_json: section.source_policy_json,
+      source_refs_json: section.source_refs_json,
     },
   }));
 
@@ -583,6 +772,7 @@ function createKnowledgeDocument(game, groupedApprovedPatches) {
       common_questions_text: joinValues(game.commonQuestions),
       wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
       wiki_visibility: 'internal',
+      ...scalarProvenance(documentProvenance),
     },
     sections,
   };
@@ -590,6 +780,7 @@ function createKnowledgeDocument(game, groupedApprovedPatches) {
 
 function createRecommendationDocument(game, groupedApprovedPatches) {
   const profile = getRecommendationProfile(game);
+  const documentProvenance = buildKnowledgeProvenance(game, 'recommendation', 'document');
   const sections = createRecommendationSectionDocuments(game, groupedApprovedPatches).map((section) => ({
     section_id: section.section_id,
     title: section.heading,
@@ -599,6 +790,18 @@ function createRecommendationDocument(game, groupedApprovedPatches) {
       char_count: section.content.length,
       chapter_id: section.chapter_id,
       patch_id: section.patch_id || '',
+      confidence_score: section.confidence_score,
+      verification_status: section.verification_status,
+      verified_at: section.verified_at,
+      source_retrieved_at: section.source_retrieved_at,
+      stale_after_days: section.stale_after_days,
+      stale_at: section.stale_at,
+      canonicality: section.canonicality,
+      primary_source_type: section.primary_source_type,
+      source_ref_count: section.source_ref_count,
+      source_types_text: section.source_types_text,
+      source_policy_json: section.source_policy_json,
+      source_refs_json: section.source_refs_json,
     },
   }));
 
@@ -636,6 +839,7 @@ function createRecommendationDocument(game, groupedApprovedPatches) {
       knowledge_tier: getKnowledgeTier(game),
       wiki_compile_version: INTERNAL_WIKI_COMPILE_VERSION,
       wiki_visibility: 'internal',
+      ...scalarProvenance(documentProvenance),
     },
     sections,
   };
@@ -672,8 +876,32 @@ async function loadGameDatabase() {
   }
 }
 
+async function loadSourceCandidates() {
+  try {
+    const raw = await fs.readFile(SOURCE_CANDIDATES_FILE, 'utf8');
+    const candidates = raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+
+    return new Map(
+      candidates
+        .filter((candidate) => candidate && typeof candidate === 'object' && candidate.slug)
+        .map((candidate) => [compactText(candidate.slug), candidate]),
+    );
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return new Map();
+    }
+
+    throw error;
+  }
+}
+
 async function main() {
   const { games, approvedPatches } = await loadGameDatabase();
+  sourceCandidatesBySlug = await loadSourceCandidates();
   const groupedApprovedPatches = groupApprovedPatches(approvedPatches);
 
   if (!games.length) {
@@ -706,6 +934,7 @@ async function main() {
         recommendation_documents: recommendationDocuments.length,
         section_documents: sectionDocuments.length,
         approved_patches: approvedPatches.length,
+        source_candidates: sourceCandidatesBySlug.size,
         outputs: [
           path.relative(PROJECT_ROOT, DOCUMENT_OUTPUT_FILE),
           path.relative(PROJECT_ROOT, RECOMMENDATION_OUTPUT_FILE),

@@ -21,6 +21,14 @@ const REQUIRED_SECTION_IDS = new Set([
   'rec_tags',
   'rec_search',
 ]);
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const ALLOWED_VERIFICATION_STATUSES = new Set(['source_backed', 'reviewed', 'needs_review', 'stale']);
+const ALLOWED_CANONICALITY = new Set([
+  'platform_rules_excerpt',
+  'structured_platform_metadata',
+  'community_metadata',
+  'local_curated_summary',
+]);
 
 function readJsonl(filePath) {
   return fs.readFileSync(filePath, 'utf8')
@@ -52,6 +60,70 @@ function getGameId(row) {
 
 function getTitleCn(row) {
   return String(row.title_cn || row.metadata?.title_cn || row.title || '').trim();
+}
+
+function hasValue(value) {
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+function parseSourceRefs(row) {
+  if (Array.isArray(row.source_refs)) {
+    return row.source_refs;
+  }
+
+  const raw = row.source_refs_json || row.metadata?.source_refs_json;
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(String(raw));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function validateProvenance(row, label, failures) {
+  const metadata = row.metadata || {};
+  const confidenceScore = row.confidence_score ?? metadata.confidence_score;
+  const verificationStatus = row.verification_status ?? metadata.verification_status;
+  const verifiedAt = row.verified_at ?? metadata.verified_at;
+  const sourceRetrievedAt = row.source_retrieved_at ?? metadata.source_retrieved_at;
+  const staleAfterDays = row.stale_after_days ?? metadata.stale_after_days;
+  const staleAt = row.stale_at ?? metadata.stale_at;
+  const canonicality = row.canonicality ?? metadata.canonicality;
+  const primarySourceType = row.primary_source_type ?? metadata.primary_source_type;
+  const sourceRefCount = row.source_ref_count ?? metadata.source_ref_count;
+  const sourceTypesText = row.source_types_text ?? metadata.source_types_text;
+  const sourceRefs = parseSourceRefs(row);
+
+  failIf(
+    typeof confidenceScore !== 'number' || confidenceScore < 0 || confidenceScore > 1,
+    `${label} invalid confidence_score: ${confidenceScore}`,
+    failures,
+  );
+  failIf(!ALLOWED_VERIFICATION_STATUSES.has(String(verificationStatus)), `${label} invalid verification_status: ${verificationStatus}`, failures);
+  failIf(!ISO_DATE_PATTERN.test(String(verifiedAt)), `${label} invalid verified_at: ${verifiedAt}`, failures);
+  failIf(!ISO_DATE_PATTERN.test(String(sourceRetrievedAt)), `${label} invalid source_retrieved_at: ${sourceRetrievedAt}`, failures);
+  failIf(typeof staleAfterDays !== 'number' || staleAfterDays <= 0, `${label} invalid stale_after_days: ${staleAfterDays}`, failures);
+  failIf(!ISO_DATE_PATTERN.test(String(staleAt)), `${label} invalid stale_at: ${staleAt}`, failures);
+  failIf(!ALLOWED_CANONICALITY.has(String(canonicality)), `${label} invalid canonicality: ${canonicality}`, failures);
+  failIf(!hasValue(primarySourceType), `${label} missing primary_source_type`, failures);
+  failIf(typeof sourceRefCount !== 'number' || sourceRefCount < 1, `${label} invalid source_ref_count: ${sourceRefCount}`, failures);
+  failIf(!hasValue(sourceTypesText), `${label} missing source_types_text`, failures);
+  failIf(sourceRefs.length < 1, `${label} missing source_refs`, failures);
+  failIf(sourceRefs.length > 0 && sourceRefs.length !== sourceRefCount, `${label} source_ref_count mismatch`, failures);
+
+  sourceRefs.forEach((sourceRef, index) => {
+    const sourceLabel = `${label} source_refs[${index}]`;
+    failIf(!hasValue(sourceRef?.source_type), `${sourceLabel} missing source_type`, failures);
+    failIf(!hasValue(sourceRef?.title), `${sourceLabel} missing title`, failures);
+    failIf(!hasValue(sourceRef?.url), `${sourceLabel} missing url`, failures);
+    failIf(!ISO_DATE_PATTERN.test(String(sourceRef?.retrieved_at || '')), `${sourceLabel} invalid retrieved_at`, failures);
+    failIf(typeof sourceRef?.confidence !== 'number' || sourceRef.confidence < 0 || sourceRef.confidence > 1, `${sourceLabel} invalid confidence`, failures);
+    failIf(!hasValue(sourceRef?.evidence_scope), `${sourceLabel} missing evidence_scope`, failures);
+  });
 }
 
 const failures = [];
@@ -86,6 +158,7 @@ if (failures.length === 0) {
     failIf(titleCn && !CJK_PATTERN.test(titleCn), `${gameId} title_cn is not localized: ${titleCn}`, failures);
     failIf(MOJIBAKE_PATTERN.test(content) || MOJIBAKE_PATTERN.test(titleCn), `${gameId}:${sectionId} contains mojibake`, failures);
     failIf(RECOMMENDATION_PUNCTUATION_NOISE.test(content), `${gameId}:${sectionId} contains recommendation punctuation noise`, failures);
+    validateProvenance(row, `${gameId}:${sectionId}`, failures);
   }
 
   failIf(gameRows.size !== 500, `expected 500 games in section export, got ${gameRows.size}`, failures);
@@ -99,6 +172,13 @@ if (failures.length === 0) {
   const recommendationDocuments = readJsonl(RECOMMENDATION_FILE);
   failIf(documents.length !== 1000, `expected 1000 combined KB docs, got ${documents.length}`, failures);
   failIf(recommendationDocuments.length !== 500, `expected 500 recommendation docs, got ${recommendationDocuments.length}`, failures);
+
+  for (const document of [...documents, ...recommendationDocuments]) {
+    validateProvenance({ metadata: document.metadata }, `${document.document_id}:document`, failures);
+    for (const section of document.sections || []) {
+      validateProvenance({ metadata: section.metadata }, `${document.document_id}:${section.section_id}`, failures);
+    }
+  }
 }
 
 if (failures.length > 0) {
@@ -112,4 +192,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('KB validation passed: 500 games, 1000 docs, 500 recommendations, 5000 clean sections.');
+console.log('KB validation passed: 500 games, 1000 docs, 500 recommendations, 5000 clean sections with provenance metadata.');

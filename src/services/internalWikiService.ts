@@ -587,6 +587,8 @@ export function buildInternalRefereeContext(game: Game, userQuestion: string): I
     `游戏：${game.titleCn}`,
     `内部规则编译版本：${bundle.compileVersion}`,
     `知识完整度：${bundle.completeness}`,
+    `内部知识置信度：${bundle.confidence.toFixed(2)}`,
+    bundle.missingFields.length > 0 ? `缺失字段：${bundle.missingFields.join(' / ')}` : '',
     bundle.conflictFlags.length > 0 ? `需要留意：${bundle.conflictFlags.join(' / ')}` : '',
     '请只依据下列内部规则章节作答，不要向用户暴露章节名、编译信息或资料来源。',
     ...selectedChapters.map((chapter) => [
@@ -724,8 +726,9 @@ export function buildInternalRecommendationContext(
       `game_name=${game.titleCn}`,
       `compile_version=${bundle.compileVersion}`,
       `fit_confidence=${bundle.confidence.toFixed(2)}`,
+      bundle.missingFields.length > 0 ? `missing_fields=${bundle.missingFields.join(' / ')}` : '',
       ...chapters.map((chapter) => `- ${chapter.chapterTitle}：${chapter.text}`),
-    ].join('\n');
+    ].filter(Boolean).join('\n');
   });
 
   return [

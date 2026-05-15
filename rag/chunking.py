@@ -36,6 +36,10 @@ def _format_metadata_list(raw_value: object, limit: int = 10) -> str:
     return " | ".join(parts[:limit])
 
 
+def _metadata_value(section_metadata: dict, document_metadata: dict, key: str) -> object:
+    return section_metadata.get(key) if section_metadata.get(key) not in (None, "") else document_metadata.get(key)
+
+
 def _build_context_header(
     document: KnowledgeDocument,
     section: Optional[DocumentSection],
@@ -87,6 +91,36 @@ def _build_context_header(
         lines.append(f"标签：{tags}")
     if common_questions and mode == "referee":
         lines.append(f"常见问法：{common_questions}")
+
+    confidence_score = _metadata_value(section_metadata, metadata, "confidence_score")
+    verification_status = _metadata_value(section_metadata, metadata, "verification_status")
+    if confidence_score is not None and verification_status:
+        lines.append(f"知识置信度：{verification_status} / {confidence_score}")
+
+    primary_source_type = _metadata_value(section_metadata, metadata, "primary_source_type")
+    source_types_text = _format_metadata_list(
+        _metadata_value(section_metadata, metadata, "source_types_text"),
+        limit=5,
+    )
+    if primary_source_type:
+        source_line = f"主要来源：{primary_source_type}"
+        if source_types_text:
+            source_line += f"；来源类型：{source_types_text}"
+        lines.append(source_line)
+
+    verified_at = _metadata_value(section_metadata, metadata, "verified_at")
+    source_retrieved_at = _metadata_value(section_metadata, metadata, "source_retrieved_at")
+    stale_at = _metadata_value(section_metadata, metadata, "stale_at")
+    freshness_parts = []
+    if verified_at:
+        freshness_parts.append(f"校验日 {verified_at}")
+    if source_retrieved_at:
+        freshness_parts.append(f"来源获取日 {source_retrieved_at}")
+    if stale_at:
+        freshness_parts.append(f"建议复核日 {stale_at}")
+    if freshness_parts:
+        lines.append("时效性：" + "；".join(str(part) for part in freshness_parts))
+
     if chunk_count > 1:
         lines.append(f"分块：{chunk_index}/{chunk_count}")
 

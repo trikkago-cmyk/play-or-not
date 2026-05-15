@@ -672,6 +672,67 @@ function matchesWhereClause(section: LocalKnowledgeSection, where: unknown): boo
   });
 }
 
+function getSectionConfidenceScore(section: LocalKnowledgeSection): number | undefined {
+  return toNumber(section.confidence_score);
+}
+
+function isIsoDateBeforeToday(value: unknown): boolean {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  return value < today;
+}
+
+function getEffectiveVerificationStatus(section: LocalKnowledgeSection): string {
+  const status = String(section.verification_status || '').trim();
+  if (status === 'stale' || isIsoDateBeforeToday(section.stale_at)) {
+    return 'stale';
+  }
+  return status || 'needs_review';
+}
+
+function parseSourceRefs(section: LocalKnowledgeSection) {
+  if (Array.isArray(section.source_refs)) {
+    return section.source_refs;
+  }
+
+  if (typeof section.source_refs_json !== 'string' || !section.source_refs_json.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(section.source_refs_json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getProvenanceScoreAdjustment(section: LocalKnowledgeSection, mode: string | undefined): number {
+  const status = getEffectiveVerificationStatus(section);
+  const confidenceScore = getSectionConfidenceScore(section);
+  const refereeMode = mode !== 'recommendation';
+  let adjustment = 0;
+
+  if (status === 'source_backed') {
+    adjustment += refereeMode ? 4 : 2;
+  } else if (status === 'reviewed') {
+    adjustment += refereeMode ? 1 : 0.5;
+  } else if (status === 'needs_review') {
+    adjustment -= refereeMode ? 5 : 1.5;
+  } else if (status === 'stale') {
+    adjustment -= refereeMode ? 14 : 5;
+  }
+
+  if (typeof confidenceScore === 'number') {
+    adjustment += (confidenceScore - 0.7) * (refereeMode ? 8 : 3);
+  }
+
+  return adjustment;
+}
+
 function extractNgrams(value: string, minLength = 2, maxLength = 4) {
   const grams: string[] = [];
   for (let size = minLength; size <= Math.min(maxLength, value.length); size += 1) {
@@ -1056,6 +1117,10 @@ function scoreLocalSection(
     }
   }
 
+  if (score > 0) {
+    score += getProvenanceScoreAdjustment(section, mode);
+  }
+
   return score;
 }
 
@@ -1092,6 +1157,19 @@ function buildLocalHit(
       playtime_min: section.playtime_min,
       age_rating: section.age_rating,
       complexity: section.complexity,
+      confidence_score: section.confidence_score,
+      verification_status: getEffectiveVerificationStatus(section),
+      verified_at: section.verified_at,
+      source_retrieved_at: section.source_retrieved_at,
+      stale_after_days: section.stale_after_days,
+      stale_at: section.stale_at,
+      canonicality: section.canonicality,
+      primary_source_type: section.primary_source_type,
+      source_ref_count: section.source_ref_count,
+      source_types_text: section.source_types_text,
+      source_policy_json: section.source_policy_json,
+      source_refs_json: section.source_refs_json,
+      source_refs: parseSourceRefs(section),
       search_text: section.search_text || '',
       ...overrides.metadata,
     },

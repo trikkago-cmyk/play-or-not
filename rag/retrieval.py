@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import time
 from collections import defaultdict
+from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 from rag.chroma_store import ChromaVectorStore
@@ -1056,6 +1057,44 @@ def _section_type_bonus(hit: RetrievalHit, mode: Optional[str], section_target: 
     return bonus
 
 
+def _safe_float(value: Any) -> Optional[float]:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _effective_verification_status(metadata: Dict[str, Any]) -> str:
+    status = str(metadata.get("verification_status") or "").strip()
+    stale_at = str(metadata.get("stale_at") or "").strip()
+    if status == "stale" or (re.match(r"^\d{4}-\d{2}-\d{2}$", stale_at) and stale_at < date.today().isoformat()):
+        return "stale"
+    return status or "needs_review"
+
+
+def _provenance_bonus(metadata: Dict[str, Any], mode: Optional[str]) -> float:
+    status = _effective_verification_status(metadata)
+    confidence_score = _safe_float(metadata.get("confidence_score"))
+    referee_mode = mode != "recommendation"
+    bonus = 0.0
+
+    if status == "source_backed":
+        bonus += 0.07 if referee_mode else 0.035
+    elif status == "reviewed":
+        bonus += 0.02 if referee_mode else 0.01
+    elif status == "needs_review":
+        bonus -= 0.08 if referee_mode else 0.025
+    elif status == "stale":
+        bonus -= 0.22 if referee_mode else 0.08
+
+    if confidence_score is not None:
+        bonus += (confidence_score - 0.70) * (0.16 if referee_mode else 0.06)
+
+    return bonus
+
+
 def _metadata_bonus(
     hit: RetrievalHit,
     query_text: str,
@@ -1066,6 +1105,7 @@ def _metadata_bonus(
     metadata = hit.metadata or {}
     bonus = 0.0
     knowledge_tier = normalize_text(str(metadata.get("knowledge_tier", "")))
+    bonus += _provenance_bonus(metadata, mode)
 
     if active_game_id and metadata.get("game_id") == active_game_id:
         bonus += 0.12
