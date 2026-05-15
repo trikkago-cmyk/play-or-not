@@ -299,7 +299,7 @@ describe('llmService recommendation language guardrail', () => {
     expect(result.text).not.toContain('再补一个爽点');
     expect(result.text).not.toContain('推荐理由');
     expect(result.text).toContain('**气氛升温**');
-    expect(result.text).toContain('**6人不掉线**');
+    expect(result.text).toContain('**6人正合适**');
     expect((globalThis.fetch as any).mock.calls.some(([input]: [RequestInfo | URL]) => String(input).includes('/api/rag'))).toBe(false);
   });
 
@@ -362,8 +362,73 @@ describe('llmService recommendation language guardrail', () => {
     expect(result.text).not.toContain('最抓人的点');
     expect(result.text).not.toContain('再补一个爽点');
     expect(result.text).toContain('**气氛升温**');
-    expect(result.text).toContain('**6人不掉线**');
+    expect(result.text).toContain('**6人正合适**');
     expect((globalThis.fetch as any).mock.calls.some(([input]: [RequestInfo | URL]) => String(input).includes('/api/rag'))).toBe(false);
+  });
+
+  it('rewrites awkward pseudo-poetic recommendation copy into plain DM language', async () => {
+    (globalThis.fetch as any).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/rag')) {
+        return {
+          ok: true,
+          json: async () => ({
+            hits: [
+              {
+                chunk_id: 'avalon:recommendation:1',
+                document_id: 'avalon',
+                title: '阿瓦隆',
+                text: '适合 5 到 10 人的阵营推理聚会局，桌上戏很多。',
+                section_title: '推荐词条',
+                distance: 0.08,
+                score: 0.92,
+                metadata: { game_id: 'avalon' },
+              },
+            ],
+          }),
+        } as Response;
+      }
+
+      if (url.includes('/api/chat')) {
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  reply: '如果你想找一款规则不压人、但决策很有味道的，我会先推 **《阿瓦隆》**。\n\n- **决策有后劲**：一款适合 5-10 人的阵营推理桌游。\n- **6人不掉线**：而且 6 人基本就在它的舒服区间。\n- **越玩越有账**：后劲很足，后面都会回来找你算账。',
+                  recommendation_name: '阿瓦隆',
+                  recommendation_id: 'avalon',
+                }),
+              },
+            }],
+          }),
+        } as Response;
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    const result = await getLLMResponse(
+      '推荐一个 6 人聚会桌游',
+      'recommendation',
+      undefined,
+      [],
+      [],
+    );
+
+    const recommendedGame = GAME_DATABASE.find((game) => game.id === result.gameId);
+    expect(recommendedGame).toBeDefined();
+    expect(result.text).toContain(`**《${recommendedGame!.titleCn}》**`);
+    expect(result.text).toContain('**气氛升温**');
+    expect(result.text).toContain('**6人正合适**');
+    expect(result.text).not.toContain('决策有后劲');
+    expect(result.text).not.toContain('越玩越有账');
+    expect(result.text).not.toContain('决策很有味道');
+    expect(result.text).not.toContain('舒服区间');
+    expect(result.text).not.toContain('不掉线');
+    expect(result.text).not.toContain('回来找你算账');
   });
 
   it('keeps recommendation prompts locked to one game even when the user asks for several options', async () => {

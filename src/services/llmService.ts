@@ -153,6 +153,7 @@ interface PreparedLlmTurn {
 
 const RECOMMENDATION_INTERNAL_LABEL_PATTERN = /(推荐摘要|适合场景|结构化词条|推荐检索语料|推荐词条|人数词条|时长词条|难度词条|场景词条|互动词条|机制词条|氛围词条|检索别名|如果用户想找|用户可能会这样描述它)/;
 const GENERIC_RECOMMENDATION_HEADING_PATTERN = /(这局为什么会中它|为什么适合你们这局|为什么选中它|为什么选它|最抓人的点|再补一个爽点|爽点是什么|推荐理由|核心亮点|好玩点|更容易上头的地方)/;
+const AWKWARD_RECOMMENDATION_COPY_PATTERN = /(决策有后劲|越玩越有[账帐]|决策很有味道|每一步都真有味道|后劲很足|回来找你算[账帐]|舒服区间|不掉线|开爽)/;
 
 function sanitizeRecommendationEvidenceText(text: string): string {
   if (!text) {
@@ -184,6 +185,15 @@ function sanitizeRecommendationReplyText(text: string): string {
     .replace(/按你刚才这句，我先回到当前召回里最稳的一款[:：]?/g, '按你这局的需求，我先给你落一款更贴的：')
     .replace(/我直接给你推荐召回中最稳的这一句[:：]?/g, '这局我先给你落这款：')
     .replace(/当前召回里最稳的一款[:：]?/g, '这局更贴的一款：')
+    .replace(/决策有后劲/g, '每步都有取舍')
+    .replace(/越玩越有[账帐]/g, '长线规划更过瘾')
+    .replace(/决策很有味道/g, '每一步都要想一想')
+    .replace(/每一步都真有味道/g, '每一步都要想一想')
+    .replace(/后劲很足/g, '越到后面越有东西可琢磨')
+    .replace(/后面都会回来找你算[账帐]/g, '后面都会影响局势')
+    .replace(/舒服区间/g, '适合人数')
+    .replace(/不掉线/g, '不容易有人干等')
+    .replace(/开爽/g, '开起来')
     .replace(/\[(?:推荐摘要|适合场景|结构化词条|推荐检索语料|推荐词条)\]/g, '')
     .replace(/[【](?:推荐摘要|适合场景|结构化词条|推荐检索语料|推荐词条)[】]/g, '')
     .replace(/(?:^|\n)\s*-\s*(?:人数词条|时长词条|难度词条|场景词条|互动词条|机制词条|氛围词条|检索别名)[:：][^\n]*/g, '')
@@ -244,7 +254,7 @@ const TAG_SELLING_ANGLES: Record<string, string> = {
   嘴炮谈判: '好玩不只在机制，更多是在互相拿捏、说服和反将一军。',
   高互动对抗: '不是各玩各的那种，你们会一直盯着彼此的动作。',
   烧脑策略: '它不是靠背规则唬人，而是越玩越能感到每一步都有取舍。',
-  重策略: '后劲很足，前面埋的小决策，后面都会回来找你算账。',
+  重策略: '前期怎么铺路、后面怎么兑现，都会影响整局走向，适合想认真动脑的人。',
   轻松休闲: '规则不拧巴，坐下没多久就能进入“开始好玩”的状态。',
   新手友好: '第一次玩也不容易掉队，理解成本很低。',
   欢乐搞笑: '笑点是自然冒出来的，不是那种硬闹腾。',
@@ -268,8 +278,8 @@ const TAG_HIGHLIGHT_LABELS: Record<string, string> = {
   阵营推理: '互相试探',
   嘴炮谈判: '可以互相拿捏',
   高互动对抗: '全程盯人',
-  烧脑策略: '决策有后劲',
-  重策略: '越玩越有账',
+  烧脑策略: '每步都有取舍',
+  重策略: '长线规划更过瘾',
   轻松休闲: '上手不费劲',
   新手友好: '新手不掉队',
   欢乐搞笑: '笑点自然冒',
@@ -288,7 +298,7 @@ const TAG_HIGHLIGHT_LABELS: Record<string, string> = {
   大团体适配: '人多不散',
   '5人以上佳': '多人也热',
   '3到4人佳': '三四人刚好',
-  '15分钟内': '十几分钟开爽',
+  '15分钟内': '十几分钟开起来',
   '30分钟内': '半小时成局',
   '60分钟内': '一小时有起伏',
 };
@@ -313,7 +323,7 @@ function buildRecommendationIntentHook(intent: RecommendationIntent, game: Game,
   } else if (intent.desiredTags.includes('合作共赢') || intent.desiredTags.includes('低冲突友好')) {
     line = `如果你们想玩得轻松一点、但又别太平，我会先推 **《${game.titleCn}》**。`;
   } else if (intent.desiredTags.includes('烧脑策略') || intent.desiredTags.includes('重策略')) {
-    line = `如果你想找一款规则不压人、但决策很有味道的，我会先推 **《${game.titleCn}》**。`;
+    line = `如果你想找一款规则不压人、但每一步都要认真想想的，我会先推 **《${game.titleCn}》**。`;
   } else if (typeof intent.requestedPlayerCount === 'number') {
     line = `按你们这局 **${intent.requestedPlayerCount}人** 的需求，我会先推 **《${game.titleCn}》**。`;
   } else if (
@@ -385,19 +395,19 @@ function buildRecommendationPlayerFitLine(game: Game, intent: RecommendationInte
     typeof intent.requestedPlayerRangeMin === 'number'
     && typeof intent.requestedPlayerRangeMax === 'number'
   ) {
-    return `你们这个人数区间它都撑得住，**${intent.requestedPlayerRangeMin}-${intent.requestedPlayerRangeMax}人** 开起来不会挤，也不会空。`;
+    return `你们这个人数段它都能玩开，**${intent.requestedPlayerRangeMin}-${intent.requestedPlayerRangeMax}人** 不会挤，也不会冷清。`;
   }
 
   if (typeof intent.requestedPlayerCount === 'number') {
     if (game.bestPlayerCount?.includes(intent.requestedPlayerCount)) {
-      return `而且 **${intent.requestedPlayerCount}人** 基本就在它的舒服区间，节奏最容易出来。`;
+      return `你们 **${intent.requestedPlayerCount}人** 开它正合适，节奏最容易出来。`;
     }
 
-    return `你们这局 **${intent.requestedPlayerCount}人** 也能顺顺地开起来，不容易有人掉线。`;
+    return `你们这局 **${intent.requestedPlayerCount}人** 也能顺利开起来，不容易有人干等。`;
   }
 
   if (intent.desiredTags.includes('朋友聚会') || intent.desiredTags.includes('团建破冰')) {
-    return '它对人数包容度不错，桌上人多时也能把节奏带起来。';
+    return '它对人数包容度不错，桌上人多时也能把气氛带起来。';
   }
 
   return null;
@@ -412,18 +422,18 @@ function buildRecommendationPlayerFitLabel(intent: RecommendationIntent): string
     typeof intent.requestedPlayerRangeMin === 'number'
     && typeof intent.requestedPlayerRangeMax === 'number'
   ) {
-    return `${intent.requestedPlayerRangeMin}-${intent.requestedPlayerRangeMax}人都能接住`;
+    return `${intent.requestedPlayerRangeMin}-${intent.requestedPlayerRangeMax}人能玩开`;
   }
 
   if (typeof intent.requestedPlayerCount === 'number') {
-    return `${intent.requestedPlayerCount}人不掉线`;
+    return `${intent.requestedPlayerCount}人正合适`;
   }
 
   if (intent.desiredTags.includes('朋友聚会') || intent.desiredTags.includes('团建破冰')) {
-    return '人多也能热';
+    return '人多也能热闹';
   }
 
-  return '人数不挑剔';
+  return '人数适配宽';
 }
 
 function buildRecommendationTempoLine(game: Game): string {
@@ -472,10 +482,10 @@ function buildRecommendationClose(intent: RecommendationIntent): string {
   }
 
   if (intent.desiredTags.includes('烧脑策略') || intent.desiredTags.includes('重策略')) {
-    return '如果你想要的是那种规则不压人、但每一步都真有味道的局，它会越玩越顺手。';
+    return '如果你想要的是规则不压人、但能认真动脑的局，它会越玩越有东西可琢磨。';
   }
 
-  return '如果你们想找一款很快就能进入状态、而且越玩越有味道的桌游，它会是个很稳的选择。';
+  return '如果你们想找一款很快就能进入状态、而且越玩越有画面的桌游，它会很适合。';
 }
 
 function uniqueRecommendationHighlights(highlights: Array<RecommendationHighlight | undefined>): RecommendationHighlight[] {
@@ -1854,6 +1864,10 @@ function shouldForceLocalRecommendationRewrite(text: string): boolean {
     return true;
   }
 
+  if (AWKWARD_RECOMMENDATION_COPY_PATTERN.test(compact)) {
+    return true;
+  }
+
   if (/(?:\[|【)(?:推荐摘要|适合场景|结构化词条|推荐检索语料|推荐词条)(?:\]|】)/.test(compact)) {
     return true;
   }
@@ -2003,11 +2017,12 @@ function getSystemInstruction({
     11. 不要把回复写成数据库说明书。除非用户明确追问参数，否则不要机械复述人数、时长、标签；这些信息只能当辅助，不要喧宾夺主。
     12. 你的话术要自然、轻松、带一点懂行朋友的幽默感，但不要油腻，不要冒出“召回”“候选池”“记忆上下文”“内部识别码”这类内部词。
     13. 推荐文案默认写成：**1句自然点名 + 2到3个很短的无序列表 + 1句收尾推动**。
-    14. 每个 bullet 的 **加粗部分必须是具体体验标签**，例如“轻松有趣”“互相捉弄”“把气氛搞热”“非常烧脑”“逻辑严密”“新手不掉队”。不要写“为什么选它”“推荐理由”“核心亮点”“最抓人的点”“再补一个爽点”这种通用栏目名。
+    14. 每个 bullet 的 **加粗部分必须是具体体验标签**，例如“轻松有趣”“互相捉弄”“把气氛搞热”“非常烧脑”“逻辑严密”“新手不费劲”。不要写“为什么选它”“推荐理由”“核心亮点”“最抓人的点”“再补一个爽点”这种通用栏目名。
     15. 只抓当前这局最 relevant 的那个体验去讲：它怎么适合现在这群人、这股气氛、这个时长，而不是把资料卡全背一遍。
     16. 除非用户在问参数，否则不要大段重复人数、时长；真的要提，也只点到为止，塞进一句话里。
     17. 如果用户明确想看“几点亮点”，你可以只围绕这一款游戏列 **2 到 3 个很短的点**；每个点的标题都要像这款游戏自己的卖点，不要像模板字段。
     18. 绝对不要输出模型自己的思考过程、犹豫过程、候选比较过程；只给用户最终那版能直接看的推荐话术。
+    19. 禁止使用伪文艺或产品黑话式表达，例如“决策有后劲”“越玩越有账/帐”“决策很有味道”“舒服区间”“不掉线”“开爽”“后面回来找你算账”。请换成用户能一眼懂的说法：每步都有取舍、三个人正合适、十几分钟就能开起来、长线规划更过瘾。
 
       【回复格式要求】：
       - 请务必使用 ** Markdown ** 格式。
@@ -2015,6 +2030,7 @@ function getSystemInstruction({
       - 第一行可以直接点名推荐，但不要像播报卡片。
       - 默认就用 **2到3个短 bullet** 来讲这款游戏最值得玩的点，每个 bullet 的 **加粗小标题** 必须是具体体验标签，不是栏目名。
       - 禁止使用这些小标题：**这局为什么会中它**、**为什么适合你们这局**、**为什么选它**、**推荐理由**、**核心亮点**、**最抓人的点**、**再补一个爽点**、**爽点是什么**。
+      - 禁止使用这些别扭说法：**决策有后劲**、**越玩越有账/帐**、**决策很有味道**、**舒服区间**、**不掉线**、**开爽**、**回来找你算账**。
       - bullet 只围绕这一款游戏展开，不要在同一轮里同时推荐多款游戏。
       - 收尾用一句自然的推动，不要再复述前文。
 
@@ -2453,8 +2469,11 @@ async function callLLMAPIStream(
       rawText += delta;
       const preview = extractStreamingReplyPreview(rawText);
       if (preview && preview !== lastPreview) {
+        const userFacingPreview = mode === 'recommendation'
+          ? sanitizeRecommendationReplyText(preview)
+          : preview;
         lastPreview = preview;
-        callbacks.onReplyUpdate?.(preview);
+        callbacks.onReplyUpdate?.(userFacingPreview);
       }
     }
 
@@ -2701,9 +2720,8 @@ function finalizeLlmResponse(
       const recName = normalizeKnownGameTitleVariants(parsedResult.recommendation_name || '');
       const allowedCandidateIds = new Set(recommendationCandidates.map((candidate) => candidate.game.id));
 
-      const text = sanitizeRecommendationReplyText(
-        String(parsedResult.reply || '').replace(/\\n/g, '\n').replace(/\\\*/g, '*'),
-      );
+      const rawReplyText = String(parsedResult.reply || '').replace(/\\n/g, '\n').replace(/\\\*/g, '*');
+      const text = sanitizeRecommendationReplyText(rawReplyText);
 
       const matches = Array.from(text.matchAll(/[《【](.*?)[》】]/g)).map((match) => match[1].replace(/[*_]/g, '').trim());
       const detectedGames = matches
@@ -2768,7 +2786,11 @@ function finalizeLlmResponse(
         }
       }
 
-      if (finalGame && !parsedResult.unknown_target_game && shouldForceLocalRecommendationRewrite(text)) {
+      if (
+        finalGame
+        && !parsedResult.unknown_target_game
+        && (shouldForceLocalRecommendationRewrite(rawReplyText) || shouldForceLocalRecommendationRewrite(text))
+      ) {
         const rewriteCandidate = recommendationCandidates.find((candidate) => candidate.game.id === finalGame.id) ?? {
           game: finalGame,
           aggregateScore: 0,
