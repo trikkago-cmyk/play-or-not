@@ -1,9 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import sttHandler from '../stt';
 
+function createMultipartAudioRequest(url = 'https://play-or-not-dm.vercel.app/api/stt') {
+  const formData = new FormData();
+  formData.append('file', new File(['audio'], 'sample.webm', { type: 'audio/webm' }));
+  vi.spyOn(Request.prototype, 'formData').mockResolvedValue(formData);
+
+  return new Request(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'multipart/form-data; boundary=play-or-not-stt-test-boundary',
+    },
+    body: '',
+  });
+}
+
 describe('/api/stt agent-friendly contract', () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it('returns endpoint documentation on GET', async () => {
@@ -70,5 +86,46 @@ describe('/api/stt agent-friendly contract', () => {
 
     const payload = await response.json();
     expect(payload.text).toContain('4 人破冰');
+  });
+
+  it('filters common Whisper hallucination boilerplate instead of returning it as user speech', async () => {
+    vi.stubEnv('STT_API_KEY', 'test-stt-key');
+    vi.stubEnv('STT_BASE_URL', 'https://api.groq.com/openai/v1');
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      text: '点赞、订阅、打赏\nMandarin Chinese\n仅大陆公司可用',
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })));
+
+    const response = await sttHandler(createMultipartAudioRequest());
+
+    const payload = await response.json();
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    expect(payload.text).toBe('');
+    expect(payload.filtered).toBe(true);
+  });
+
+  it('keeps normal Chinese transcripts from the STT provider', async () => {
+    vi.stubEnv('STT_API_KEY', 'test-stt-key');
+    vi.stubEnv('STT_BASE_URL', 'https://api.groq.com/openai/v1');
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      text: '我想玩三人复杂一点的桌游',
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })));
+
+    const response = await sttHandler(createMultipartAudioRequest());
+
+    const payload = await response.json();
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    expect(payload.text).toBe('我想玩三人复杂一点的桌游');
   });
 });

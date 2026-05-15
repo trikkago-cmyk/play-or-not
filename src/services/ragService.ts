@@ -285,10 +285,10 @@ function buildRecommendationStatePrompt(state?: RecommendationSessionState): str
     lines.push(`- 当前有效年龄硬约束：适合 ${state.maxAgeRating} 岁左右或更低门槛。`);
   }
   if (typeof state.maxComplexity === 'number') {
-    lines.push(`- 当前有效复杂度倾向：不要高于 ${state.maxComplexity.toFixed(1)}，优先轻松好教。`);
+    lines.push(`- 当前有效复杂度硬约束：不要高于 ${state.maxComplexity.toFixed(1)}，优先轻松好教。`);
   }
   if (typeof state.minComplexity === 'number') {
-    lines.push('- 当前有效复杂度倾向：不要太浅，至少有一点策略深度。');
+    lines.push(`- 当前有效复杂度硬约束：不要低于 ${state.minComplexity.toFixed(1)}，至少有一点策略深度。`);
   }
   if (state.desiredTags.length > 0) {
     lines.push(`- 当前有效意图标签：${state.desiredTags.join('、')}。`);
@@ -316,7 +316,7 @@ function inferComplexityFromText(text: string): 'low' | 'medium' | 'high' | unde
   if (/简单|轻松|休闲|入门|新手友好/.test(text)) {
     return 'low';
   }
-  if (/烧脑|策略|硬核|高复杂|深度/.test(text)) {
+  if (/烧脑|策略|硬核|高复杂|复杂|难度高|高难度|有难度|深度/.test(text)) {
     return 'high';
   }
   if (/中等|适中/.test(text)) {

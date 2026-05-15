@@ -476,6 +476,56 @@ export function stopDmTtsPlayback() {
   cancelActivePlayback();
 }
 
+export function pauseDmTtsPlayback(): boolean {
+  let didPause = false;
+
+  if (activeAudioElement) {
+    try {
+      activeAudioElement.pause();
+      didPause = true;
+    } catch (error) {
+      console.warn('DM remote TTS pause failed:', error);
+    }
+  }
+
+  if (canUseBrowserSpeechSynthesis()) {
+    try {
+      window.speechSynthesis.pause?.();
+      didPause = true;
+    } catch (error) {
+      console.warn('DM browser TTS pause failed:', error);
+    }
+  }
+
+  return didPause;
+}
+
+export function resumeDmTtsPlayback(): boolean {
+  let didResume = false;
+
+  if (activeAudioElement) {
+    try {
+      void activeAudioElement.play().catch((error) => {
+        console.warn('DM remote TTS resume failed:', error);
+      });
+      didResume = true;
+    } catch (error) {
+      console.warn('DM remote TTS resume failed:', error);
+    }
+  }
+
+  if (canUseBrowserSpeechSynthesis()) {
+    try {
+      window.speechSynthesis.resume?.();
+      didResume = true;
+    } catch (error) {
+      console.warn('DM browser TTS resume failed:', error);
+    }
+  }
+
+  return didResume;
+}
+
 export function resetDmTtsStateForTests() {
   activeSpeakToken = 0;
   voicesReadyPromise = null;

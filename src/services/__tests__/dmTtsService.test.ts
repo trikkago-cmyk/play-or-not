@@ -5,10 +5,12 @@ import {
   cancelDmTtsPrefetch,
   getDmTtsEnabled,
   hasDmTtsPrimedPlayback,
+  pauseDmTtsPlayback,
   pickBestDmVoice,
   prepareDmTtsPlayback,
   primeDmTtsPlayback,
   resetDmTtsStateForTests,
+  resumeDmTtsPlayback,
   setDmTtsEnabled,
   speakAsDm,
 } from '../dmTtsService';
@@ -66,6 +68,8 @@ describe('dmTtsService', () => {
   const speakMock = vi.fn();
   const getVoicesMock = vi.fn();
   const fetchMock = vi.fn();
+  const pauseMock = vi.fn();
+  const resumeMock = vi.fn();
 
   beforeEach(() => {
     localStorage.clear();
@@ -74,6 +78,8 @@ describe('dmTtsService', () => {
     speakMock.mockReset();
     getVoicesMock.mockReset();
     fetchMock.mockReset();
+    pauseMock.mockReset();
+    resumeMock.mockReset();
 
     speakMock.mockImplementation((utterance?: MockSpeechSynthesisUtterance) => {
       queueMicrotask(() => utterance?.onstart?.());
@@ -109,6 +115,8 @@ describe('dmTtsService', () => {
       value: {
         cancel: cancelMock,
         speak: speakMock,
+        pause: pauseMock,
+        resume: resumeMock,
         getVoices: getVoicesMock,
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
@@ -127,6 +135,15 @@ describe('dmTtsService', () => {
     );
 
     expect(speakable).toBe('不能这么做。先弃牌，再摸牌');
+  });
+
+  it('can pause and resume current speech without cancelling it', () => {
+    expect(pauseDmTtsPlayback()).toBe(true);
+    expect(resumeDmTtsPlayback()).toBe(true);
+
+    expect(pauseMock).toHaveBeenCalledTimes(1);
+    expect(resumeMock).toHaveBeenCalledTimes(1);
+    expect(cancelMock).not.toHaveBeenCalled();
   });
 
   it('prefers a warm female Chinese voice for DM playback', () => {

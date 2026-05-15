@@ -62,6 +62,22 @@ describe('DialogueAgent recommendation session memory', () => {
     });
   });
 
+  it('stores natural high-complexity wording as a hard session constraint', async () => {
+    const agent = new DialogueAgent(false);
+
+    await agent.processInput('三个人，想玩复杂一点的。', 'recommendation');
+
+    const latestOptions = getGameRecommendationMock.mock.calls.at(-1)?.[5];
+    expect(latestOptions).toMatchObject({
+      recommendationIntent: expect.objectContaining({
+        requestedPlayerCount: 3,
+        minComplexity: expect.any(Number),
+        desiredTags: expect.arrayContaining(['烧脑策略', '重策略']),
+      }),
+      recommendationSessionContext: expect.stringContaining('复杂度硬约束'),
+    });
+  });
+
   it('clears a negated mechanic while keeping still-valid hard constraints', async () => {
     const agent = new DialogueAgent(false);
 

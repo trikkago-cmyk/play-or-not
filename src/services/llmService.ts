@@ -928,6 +928,7 @@ function parseRequestedComplexityRange(query: string): { min?: number; max?: num
   if (!trimmed) {
     return {};
   }
+  const hasHighComplexityNegation = /(别|不要|不想|不用|无需|太)[^，。；,.、]{0,8}(重策|重策略|硬核|烧脑|深度|复杂|难)|(?:重策|重策略|硬核|烧脑|深度|复杂|难)[^，。；,.、]{0,8}(别|不要|不想|不用|无需|太)/.test(trimmed);
 
   const numericMaxMatch = trimmed.match(/(?:复杂度|难度)\s*(\d+(?:\.\d+)?)\s*(?:以内|以下|之内|以下的|以内的|以下吧|以内吧)/);
   if (numericMaxMatch) {
@@ -951,7 +952,10 @@ function parseRequestedComplexityRange(query: string): { min?: number; max?: num
     }
   }
 
-  if (/(重策|重策略|硬核|烧脑|深度|高复杂度)/.test(trimmed) && !/(别|不要|不想|太)/.test(trimmed)) {
+  if (
+    /(重策|重策略|硬核|烧脑|深度|高复杂度|高难度|难度高|有难度|规则复杂|复杂(?:的|点|一点|一些)?|难一点|难一些)/.test(trimmed)
+    && !hasHighComplexityNegation
+  ) {
     return { min: 2.8 };
   }
 

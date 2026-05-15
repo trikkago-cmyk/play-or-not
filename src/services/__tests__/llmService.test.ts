@@ -351,6 +351,47 @@ describe('llmService Recommendation Consistency', () => {
         expect(recommendedGame!.complexity).toBeGreaterThanOrEqual(3);
     });
 
+    it('should treat natural high-complexity wording as a hard filter', async () => {
+        const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+            const url = String(input);
+
+            if (url.includes('/api/rag')) {
+                return {
+                    ok: true,
+                    json: async () => ({ hits: [] })
+                } as Response;
+            }
+
+            if (url.includes('/api/chat')) {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        choices: [{ message: { content: JSON.stringify({
+                            reply: '我先推荐 **《斯卡特》**。',
+                            recommendation_name: '斯卡特',
+                            recommendation_id: 'skat',
+                        }) } }]
+                    })
+                } as Response;
+            }
+
+            throw new Error(`Unexpected fetch URL: ${url}`);
+        });
+
+        globalThis.fetch = fetchMock;
+
+        const result = await getLLMResponse('我要玩三人复杂的桌游');
+        const recommendedGame = GAME_DATABASE.find((game) => game.id === result.gameId);
+
+        expect(recommendedGame).toBeDefined();
+        expect(recommendedGame!.id).not.toBe('skat');
+        expect(recommendedGame!.minPlayers).toBeLessThanOrEqual(3);
+        expect(recommendedGame!.maxPlayers).toBeGreaterThanOrEqual(3);
+        expect(recommendedGame!.complexity).toBeGreaterThanOrEqual(2.8);
+        expect(result.text).toContain(`**《${recommendedGame!.titleCn}》**`);
+        expect(result.text).not.toContain('**《斯卡特》**');
+    });
+
     it('should not confuse a 9-player party request with a 9-year-old age filter', async () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
             const url = String(input);

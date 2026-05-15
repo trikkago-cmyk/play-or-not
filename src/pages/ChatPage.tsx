@@ -5,7 +5,7 @@ import GameCard from '@/components/GameCard';
 import MiniGameCard from '@/components/MiniGameCard';
 import { dialogueAgent, isRefereeRecommendationSwitchRequest } from '@/services/ragService';
 import { isMockMode, setMockMode, saveLLMConfig, initLLMConfig } from '@/services/llmService';
-import { cancelDmTtsPrefetch, getDmTtsEnabled, hasDmTtsPrimedPlayback, isDmTtsSupported, playPreparedDmTtsPlayback, prepareDmTtsPlayback, type PreparedDmTtsPlayback, preloadDmVoices, primeDmTtsPlayback, setDmTtsEnabled, speakAsDm, stopDmTtsPlayback } from '@/services/dmTtsService';
+import { cancelDmTtsPrefetch, getDmTtsEnabled, hasDmTtsPrimedPlayback, isDmTtsSupported, pauseDmTtsPlayback, playPreparedDmTtsPlayback, prepareDmTtsPlayback, type PreparedDmTtsPlayback, preloadDmVoices, primeDmTtsPlayback, resumeDmTtsPlayback, setDmTtsEnabled, speakAsDm, stopDmTtsPlayback } from '@/services/dmTtsService';
 import { collectFinalSpeechSegments, collectStablePreviewSpeechSegments, mergeSpeechSegments } from '@/services/streamedTtsUtils';
 import { mockGames } from '@/data/mockData';
 import { MarkdownText } from '@/components/MarkdownText';
@@ -35,6 +35,7 @@ interface ChatPageProps {
 
 const INITIAL_MESSAGE = '嘿！我是你的桌游DM。\n今天几个人？想玩点什么感觉的？';
 const STREAMED_TTS_PREFETCH_WINDOW = 3;
+const STT_HALLUCINATION_LINE_PATTERN = /mandarin\s+chinese|transcribe\s+faithfully|do\s+not\s+translate|the\s+audio\s+is|点赞.*订阅|订阅.*点赞|点赞.*打赏|请不吝点赞|谢谢观看|感谢观看|字幕由|仅大陆公司可用/i;
 
 type StreamedSpeechQueueItem = {
   id: string;
@@ -75,6 +76,34 @@ function createEmptyStreamedSpeechQueueState(
     streamHandled: false,
     finalized: false,
   };
+}
+
+function sanitizeVoiceInputText(rawText: string): string {
+  const lines = rawText
+    .replace(/\u200b/g, '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !STT_HALLUCINATION_LINE_PATTERN.test(line));
+
+  const cleaned = lines
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) {
+    return '';
+  }
+
+  const compact = cleaned.replace(/[\s，,。.!！?？、；;：:"'“”‘’]/g, '').toLowerCase();
+  if (
+    /mandarinchinese|transcribefaithfully|donottranslate|theaudiois/.test(compact)
+    || /点赞.*订阅|订阅.*点赞|点赞.*打赏|仅大陆公司可用/.test(compact)
+  ) {
+    return '';
+  }
+
+  return cleaned;
 }
 
 // 场景标签
@@ -138,6 +167,7 @@ export default function ChatPage({
   const inputBeforeRecordingRef = useRef('');
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaMimeTypeRef = useRef('');
+  const ttsPausedForRecordingRef = useRef(false);
   // -------------------------------------------
 
   // 模式状态：推荐模式或裁判模式
@@ -901,15 +931,18 @@ export default function ChatPage({
     recognition.onresult = (event: any) => {
       let interimText = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
+        const transcript = sanitizeVoiceInputText(event.results[i][0].transcript);
+        if (!transcript) {
+          continue;
+        }
         if (event.results[i].isFinal) {
-          livePreviewFinalTextRef.current += transcript;
+          livePreviewFinalTextRef.current = `${livePreviewFinalTextRef.current} ${transcript}`.trim();
         } else {
-          interimText += transcript;
+          interimText = `${interimText} ${transcript}`.trim();
         }
       }
 
-      const nextPreviewText = (livePreviewFinalTextRef.current + interimText).trim();
+      const nextPreviewText = sanitizeVoiceInputText(`${livePreviewFinalTextRef.current} ${interimText}`);
       if (nextPreviewText) {
         setInputValue(nextPreviewText);
       }
@@ -947,6 +980,27 @@ export default function ChatPage({
     mediaRecorderRef.current = null;
     audioChunksRef.current = [];
     mediaMimeTypeRef.current = '';
+  };
+
+  const pauseTtsForVoiceInput = () => {
+    if (!ttsSupported || !ttsEnabled || ttsPausedForRecordingRef.current) {
+      return;
+    }
+
+    if (pauseDmTtsPlayback()) {
+      ttsPausedForRecordingRef.current = true;
+    }
+  };
+
+  const resumeTtsAfterVoiceInput = () => {
+    if (!ttsPausedForRecordingRef.current) {
+      return;
+    }
+
+    ttsPausedForRecordingRef.current = false;
+    if (ttsSupported && ttsEnabled) {
+      void resumeDmTtsPlayback();
+    }
   };
 
   const getSupportedRecordingMimeType = () => {
@@ -994,7 +1048,7 @@ export default function ChatPage({
         ? payload.transcript
         : '';
 
-    return transcript.trim();
+    return sanitizeVoiceInputText(transcript);
   };
 
   const ensureMicrophonePermission = async () => {
@@ -1042,6 +1096,7 @@ export default function ChatPage({
     }
 
     try {
+      pauseTtsForVoiceInput();
       inputBeforeRecordingRef.current = inputValue;
       setInputValue('');
 
@@ -1072,6 +1127,7 @@ export default function ChatPage({
       mediaRecorder.onerror = (event) => {
         console.error('MediaRecorder error:', event);
         cleanupRecordingResources();
+        resumeTtsAfterVoiceInput();
         isStartingRecordingRef.current = false;
         isRecordingRef.current = false;
         setIsRecording(false);
@@ -1089,6 +1145,7 @@ export default function ChatPage({
         isStartingRecordingRef.current = false;
         isRecordingRef.current = false;
         setIsRecording(false);
+        resumeTtsAfterVoiceInput();
 
         if (!audioBlob.size) {
           return;
@@ -1134,6 +1191,7 @@ export default function ChatPage({
       setIsRecording(true);
     } catch (error: any) {
       cleanupRecordingResources();
+      resumeTtsAfterVoiceInput();
       isStartingRecordingRef.current = false;
       isRecordingRef.current = false;
       setIsRecording(false);
