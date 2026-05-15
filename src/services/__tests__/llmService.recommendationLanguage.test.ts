@@ -397,7 +397,7 @@ describe('llmService recommendation language guardrail', () => {
             choices: [{
               message: {
                 content: JSON.stringify({
-                  reply: '如果你想找一款规则不压人、但决策很有味道的，我会先推 **《阿瓦隆》**。\n\n- **决策有后劲**：一款适合 5-10 人的阵营推理桌游。\n- **6人不掉线**：而且 6 人基本就在它的舒服区间。\n- **越玩越有账**：后劲很足，后面都会回来找你算账。',
+                  reply: '如果你想找一款规则不压人、但决策很有味道的，我会先推 **《阿瓦隆》**。\n\n- **决策有后劲**：一款适合 5-10 人的阵营推理桌游。\n- **6人不掉线**：而且 6 人基本就在它的舒服区间。\n- **3人局最佳节奏**：3人局是公认的甜点区。\n- **越玩越有账**：后劲很足，后面都会回来找你算账。',
                   recommendation_name: '阿瓦隆',
                   recommendation_id: 'avalon',
                 }),
@@ -427,6 +427,8 @@ describe('llmService recommendation language guardrail', () => {
     expect(result.text).not.toContain('越玩越有账');
     expect(result.text).not.toContain('决策很有味道');
     expect(result.text).not.toContain('舒服区间');
+    expect(result.text).not.toContain('甜点区');
+    expect(result.text).not.toContain('sweet spot');
     expect(result.text).not.toContain('不掉线');
     expect(result.text).not.toContain('回来找你算账');
   });
