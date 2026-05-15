@@ -7,6 +7,7 @@ import { dialogueAgent, isRefereeRecommendationSwitchRequest } from '@/services/
 import { isMockMode, setMockMode, saveLLMConfig, initLLMConfig } from '@/services/llmService';
 import { cancelDmTtsPrefetch, getDmTtsEnabled, hasDmTtsPrimedPlayback, isDmTtsSupported, pauseDmTtsPlayback, playPreparedDmTtsPlayback, prepareDmTtsPlayback, type PreparedDmTtsPlayback, preloadDmVoices, primeDmTtsPlayback, resumeDmTtsPlayback, setDmTtsEnabled, speakAsDm, stopDmTtsPlayback } from '@/services/dmTtsService';
 import { collectFinalSpeechSegments, collectStablePreviewSpeechSegments, mergeSpeechSegments } from '@/services/streamedTtsUtils';
+import { appendVoiceInputText, sanitizeVoiceInputText } from '@/services/voiceInputText';
 import { mockGames } from '@/data/mockData';
 import { MarkdownText } from '@/components/MarkdownText';
 import { Button } from '@/components/ui/button';
@@ -35,7 +36,6 @@ interface ChatPageProps {
 
 const INITIAL_MESSAGE = '嘿！我是你的桌游DM。\n今天几个人？想玩点什么感觉的？';
 const STREAMED_TTS_PREFETCH_WINDOW = 3;
-const STT_HALLUCINATION_LINE_PATTERN = /mandarin\s+chinese|transcribe\s+faithfully|do\s+not\s+translate|the\s+audio\s+is|点赞.*订阅|订阅.*点赞|点赞.*打赏|请不吝点赞|谢谢观看|感谢观看|字幕由|仅大陆公司可用/i;
 
 type StreamedSpeechQueueItem = {
   id: string;
@@ -76,34 +76,6 @@ function createEmptyStreamedSpeechQueueState(
     streamHandled: false,
     finalized: false,
   };
-}
-
-function sanitizeVoiceInputText(rawText: string): string {
-  const lines = rawText
-    .replace(/\u200b/g, '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !STT_HALLUCINATION_LINE_PATTERN.test(line));
-
-  const cleaned = lines
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (!cleaned) {
-    return '';
-  }
-
-  const compact = cleaned.replace(/[\s，,。.!！?？、；;：:"'“”‘’]/g, '').toLowerCase();
-  if (
-    /mandarinchinese|transcribefaithfully|donottranslate|theaudiois/.test(compact)
-    || /点赞.*订阅|订阅.*点赞|点赞.*打赏|仅大陆公司可用/.test(compact)
-  ) {
-    return '';
-  }
-
-  return cleaned;
 }
 
 // 场景标签
@@ -944,7 +916,7 @@ export default function ChatPage({
 
       const nextPreviewText = sanitizeVoiceInputText(`${livePreviewFinalTextRef.current} ${interimText}`);
       if (nextPreviewText) {
-        setInputValue(nextPreviewText);
+        setInputValue(appendVoiceInputText(inputBeforeRecordingRef.current, nextPreviewText));
       }
     };
 
@@ -1098,7 +1070,6 @@ export default function ChatPage({
     try {
       pauseTtsForVoiceInput();
       inputBeforeRecordingRef.current = inputValue;
-      setInputValue('');
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -1156,7 +1127,7 @@ export default function ChatPage({
           const transcript = await transcribeRecordedAudio(audioBlob, recordedMimeType);
           if (!transcript) {
             if (previewText) {
-              setInputValue(previewText);
+              setInputValue(appendVoiceInputText(inputBeforeRecordingRef.current, previewText));
               inputBeforeRecordingRef.current = '';
               inputRef.current?.focus();
               return;
@@ -1167,12 +1138,12 @@ export default function ChatPage({
             return;
           }
 
-          setInputValue(transcript);
+          setInputValue(appendVoiceInputText(inputBeforeRecordingRef.current, transcript));
           inputBeforeRecordingRef.current = '';
           inputRef.current?.focus();
         } catch (error: any) {
           if (previewText) {
-            setInputValue(previewText);
+            setInputValue(appendVoiceInputText(inputBeforeRecordingRef.current, previewText));
             inputBeforeRecordingRef.current = '';
             inputRef.current?.focus();
             return;
